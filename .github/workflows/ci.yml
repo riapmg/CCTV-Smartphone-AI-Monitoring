@@ -34,7 +34,7 @@ jobs:
         run: node --check app/web/static/dashboard.js
 
   android:
-    name: Android unit tests
+    name: Android unit tests and debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -47,6 +47,17 @@ jobs:
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
-      - name: Run Android unit tests
+      - name: Run Android unit tests and assemble debug APK
         working-directory: PhoneCamSender
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
+      - name: Verify debug APK exists
+        run: test -s PhoneCamSender/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload installable debug APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: camflow-phonecam-debug-apk
+          path: PhoneCamSender/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 3
