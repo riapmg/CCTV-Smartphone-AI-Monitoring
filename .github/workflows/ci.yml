@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -36,6 +37,7 @@ jobs:
   android:
     name: Android unit tests and debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -44,20 +46,35 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
-      - uses: android-actions/setup-android@v3
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: |
+            platform-tools
       - name: Install Android SDK platform
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Run Android unit tests and assemble debug APK
         working-directory: PhoneCamSender
         run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
-      - name: Verify debug APK exists
-        run: test -s PhoneCamSender/app/build/outputs/apk/debug/app-debug.apk
+      - name: Verify debug APK identity and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="PhoneCamSender/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$AAPT"
+          test -x "$APKSIGNER"
+          PACKAGE="$("$AAPT" dump badging "$APK" | sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p")"
+          test "$PACKAGE" = "com.example.phonecamsender"
+          "$APKSIGNER" verify --verbose "$APK"
+          echo "Verified temporary development package ID and debug APK signature."
       - name: Upload installable debug APK
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
-        continue-on-error: true
         with:
           name: camflow-phonecam-debug-apk
           path: PhoneCamSender/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 7
