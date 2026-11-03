@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local signing material — never commit keystores or certificate bundles.
+/Keystore
+*.jks
+*.keystore
+*.p12
+*.pfx
