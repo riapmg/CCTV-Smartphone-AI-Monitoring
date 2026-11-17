@@ -35,7 +35,7 @@ def resolve_server_config(environ: Mapping[str, str]) -> tuple[str, int]:
     """Resolve and validate the server bind address and port.
 
     The unauthenticated dashboard stays on loopback unless an operator
-    explicitly opts in to LAN binding with SENTINEL_BIND_HOST=0.0.0.0.
+    explicitly opts in to LAN binding with a private RFC1918 address or the 0.0.0.0 wildcard.
     """
     host = environ.get("SENTINEL_BIND_HOST", DEFAULT_BIND_HOST).strip() or DEFAULT_BIND_HOST
     host = validate_bind_host(host)
