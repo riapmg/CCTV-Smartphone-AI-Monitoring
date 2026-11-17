@@ -19,9 +19,15 @@ def test_custom_valid_port_is_accepted():
     assert resolve_server_config({"SENTINEL_PORT": "8123"}) == ("127.0.0.1", 8123)
 
 
-def test_invalid_bind_host_is_rejected():
-    with pytest.raises(ValueError, match="SENTINEL_BIND_HOST"):
-        resolve_server_config({"SENTINEL_BIND_HOST": "192.168.1.10"})
+@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.10", "192.168.1.10"])
+def test_private_lan_interface_is_accepted(host):
+    assert resolve_server_config({"SENTINEL_BIND_HOST": host}) == (host, 8000)
+
+
+@pytest.mark.parametrize("host", ["192.0.2.10", "8.8.8.8", "169.254.1.2", "camera.local"])
+def test_non_private_or_invalid_bind_host_is_rejected(host):
+    with pytest.raises(ValueError, match="private RFC1918"):
+        resolve_server_config({"SENTINEL_BIND_HOST": host})
 
 
 def test_non_integer_port_is_rejected():
