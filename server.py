@@ -93,7 +93,7 @@ def main():
 
     url_local = f"http://127.0.0.1:{port}/"
 
-    print("\\n====================================================================")
+    print("\n====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
     if host == "0.0.0.0":
@@ -107,7 +107,7 @@ def main():
         print(" LAN access: disabled (loopback only)")
         print(" To opt in on a trusted LAN, set SENTINEL_BIND_HOST=0.0.0.0 before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
-    print("====================================================================\\n", flush=True)
+    print("====================================================================\n", flush=True)
 
     app.run(host=host, port=port, threaded=True, debug=False, use_reloader=False)
 
