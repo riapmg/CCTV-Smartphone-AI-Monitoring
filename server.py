@@ -42,16 +42,10 @@ def main():
     stop_event = threading.Event()
     # The dashboard and control API currently have no authentication.
     # Bind to loopback by default; LAN access requires an explicit opt-in.
-    host = os.getenv("SENTINEL_BIND_HOST", "127.0.0.1").strip() or "127.0.0.1"
-    if host not in {"127.0.0.1", "0.0.0.0"}:
-        raise SystemExit("SENTINEL_BIND_HOST must be 127.0.0.1 or 0.0.0.0")
-
     try:
-        port = int(os.getenv("SENTINEL_PORT", "8000"))
+        host, port = resolve_server_config(os.environ)
     except ValueError as exc:
-        raise SystemExit("SENTINEL_PORT must be an integer") from exc
-    if not 1 <= port <= 65535:
-        raise SystemExit("SENTINEL_PORT must be between 1 and 65535")
+        raise SystemExit(str(exc)) from exc
 
     cfg_store = ConfigStore(path=CONFIG_PATH, initial=DEFAULT_CONFIG.copy())
     frame_buf = FrameBuffer()
