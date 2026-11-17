@@ -661,22 +661,24 @@ This keeps the dashboard local to the PC at `http://127.0.0.1:8000/`; CamFlow on
 
 #### Enable CamFlow access on a trusted LAN
 
-Only when the PC and phone are on a trusted, isolated Wi-Fi/LAN, explicitly opt in to LAN binding:
+Only when the PC and phone are on a trusted, isolated Wi-Fi/LAN, explicitly opt in to one private RFC1918 IPv4 interface. Prefer the PC's specific LAN address (for example, `192.168.1.10`) so the service does not listen on every network interface:
 
 Linux / macOS:
 
 ```bash
-SENTINEL_BIND_HOST=0.0.0.0 python server.py
+SENTINEL_BIND_HOST=192.168.1.10 python server.py
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:SENTINEL_BIND_HOST = "0.0.0.0"
+$env:SENTINEL_BIND_HOST = "192.168.1.10"
 python server.py
 ```
 
-The server prints the LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
+Replace the example with the PC's actual private address. If the address is not stable or a specific interface cannot be selected, `0.0.0.0` is also supported, but it binds to all interfaces and is less restrictive.
+
+The server prints the selected LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
 
 The default ingest and recording states remain OFF. Enable them manually in the dashboard only when you intend to receive a camera stream. An empty Live View before enabling ingest is expected.
 
