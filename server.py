@@ -12,6 +12,7 @@ from app.recorder.recorder_worker import start_record_thread
 from app.ai.ai_store import AiRuntime, EventStore
 from app.ai.ai_monitor_worker import start_ai_monitor_thread
 from app.web.webapp import create_app
+from app.core.server_config import resolve_server_config
 from app.version import SENTINEL_VERSION
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
