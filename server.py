@@ -40,8 +40,18 @@ def get_local_ip() -> str:
 def main():
     logger = setup_logger(SERVER_LOG_PATH)
     stop_event = threading.Event()
-    host = "0.0.0.0"
-    port = 8000
+    # The dashboard and control API currently have no authentication.
+    # Bind to loopback by default; LAN access requires an explicit opt-in.
+    host = os.getenv("SENTINEL_BIND_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    if host not in {"127.0.0.1", "0.0.0.0"}:
+        raise SystemExit("SENTINEL_BIND_HOST must be 127.0.0.1 or 0.0.0.0")
+
+    try:
+        port = int(os.getenv("SENTINEL_PORT", "8000"))
+    except ValueError as exc:
+        raise SystemExit("SENTINEL_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise SystemExit("SENTINEL_PORT must be between 1 and 65535")
 
     cfg_store = ConfigStore(path=CONFIG_PATH, initial=DEFAULT_CONFIG.copy())
     frame_buf = FrameBuffer()
@@ -81,18 +91,23 @@ def main():
         server_log_path=SERVER_LOG_PATH,
     )
 
-    local_ip = get_local_ip()
-
-    url_lan = f"http://{local_ip}:{port}/"
     url_local = f"http://127.0.0.1:{port}/"
 
-    print("\n====================================================================")
+    print("\\n====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
-    print(f" LAN Web:    {url_lan}       open from other devices")
-    print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
+    if host == "0.0.0.0":
+        local_ip = get_local_ip()
+        url_lan = f"http://{local_ip}:{port}/"
+        print(f" LAN Web:    {url_lan}       open from trusted devices")
+        print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
+        print(" SECURITY WARNING: LAN dashboard/control endpoints have no authentication.")
+        print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
+    else:
+        print(" LAN access: disabled (loopback only)")
+        print(" To opt in on a trusted LAN, set SENTINEL_BIND_HOST=0.0.0.0 before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
-    print("====================================================================\n", flush=True)
+    print("====================================================================\\n", flush=True)
 
     app.run(host=host, port=port, threaded=True, debug=False, use_reloader=False)
 
