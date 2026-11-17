@@ -91,8 +91,8 @@ def main():
     print("\n====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
-    if host == "0.0.0.0":
-        local_ip = get_local_ip()
+    if host != "127.0.0.1":
+        local_ip = get_local_ip() if host == "0.0.0.0" else host
         url_lan = f"http://{local_ip}:{port}/"
         print(f" LAN Web:    {url_lan}       open from trusted devices")
         print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
@@ -100,7 +100,7 @@ def main():
         print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
     else:
         print(" LAN access: disabled (loopback only)")
-        print(" To opt in on a trusted LAN, set SENTINEL_BIND_HOST=0.0.0.0 before starting.")
+        print(" To opt in, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
     print("====================================================================\n", flush=True)
 
