@@ -11,8 +11,8 @@ def test_blank_bind_host_stays_on_loopback():
     assert resolve_server_config({"SENTINEL_BIND_HOST": "  "}) == ("127.0.0.1", 8000)
 
 
-def test_lan_bind_requires_explicit_host_opt_in():
-    assert resolve_server_config({"SENTINEL_BIND_HOST": "0.0.0.0"}) == ("0.0.0.0", 8000)
+def test_lan_bind_requires_explicit_private_interface_opt_in():
+    assert resolve_server_config({"SENTINEL_BIND_HOST": "192.168.1.10"}) == ("192.168.1.10", 8000)
 
 
 def test_custom_valid_port_is_accepted():
@@ -24,8 +24,11 @@ def test_private_lan_interface_is_accepted(host):
     assert resolve_server_config({"SENTINEL_BIND_HOST": host}) == (host, 8000)
 
 
-@pytest.mark.parametrize("host", ["192.0.2.10", "8.8.8.8", "169.254.1.2", "camera.local"])
-def test_non_private_or_invalid_bind_host_is_rejected(host):
+@pytest.mark.parametrize(
+    "host",
+    ["0.0.0.0", "192.0.2.10", "8.8.8.8", "169.254.1.2", "camera.local", "::1", "127.0.0.2"],
+)
+def test_non_private_or_ambiguous_bind_host_is_rejected(host):
     with pytest.raises(ValueError, match="private RFC1918"):
         resolve_server_config({"SENTINEL_BIND_HOST": host})
 
