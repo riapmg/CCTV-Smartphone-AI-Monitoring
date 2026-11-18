@@ -1,6 +1,5 @@
 # pc/server.py
 import os
-import socket
 import threading
 
 from app.core.logger import setup_logger
@@ -24,19 +23,6 @@ CONFIG_PATH = os.path.join(APP_CONFIG_DIR, "config.json")
 
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(APP_CONFIG_DIR, exist_ok=True)
-
-def get_local_ip() -> str:
-    """Best-effort LAN IP detection without sending traffic."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-    except Exception:
-        ip = "127.0.0.1"
-    finally:
-        s.close()
-    return ip
-
 
 def main():
     logger = setup_logger(SERVER_LOG_PATH)
@@ -92,7 +78,7 @@ def main():
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
     if host != "127.0.0.1":
-        local_ip = get_local_ip() if host == "0.0.0.0" else host
+        local_ip = host
         url_lan = f"http://{local_ip}:{port}/"
         print(f" LAN Web:    {url_lan}       open from trusted devices")
         print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
