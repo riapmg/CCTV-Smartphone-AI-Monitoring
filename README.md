@@ -676,7 +676,7 @@ $env:SENTINEL_BIND_HOST = "192.168.1.10"
 python server.py
 ```
 
-Replace the example with the PC's actual private address. If the address is not stable or a specific interface cannot be selected, `0.0.0.0` is also supported, but it binds to all interfaces and is less restrictive.
+Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected because the dashboard and control API do not yet have authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
 
 The server prints the selected LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
 
