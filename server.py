@@ -1,6 +1,5 @@
 # pc/server.py
 import os
-import socket
 import threading
 
 from app.core.logger import setup_logger
@@ -12,6 +11,7 @@ from app.recorder.recorder_worker import start_record_thread
 from app.ai.ai_store import AiRuntime, EventStore
 from app.ai.ai_monitor_worker import start_ai_monitor_thread
 from app.web.webapp import create_app
+from app.core.server_config import resolve_server_config
 from app.version import SENTINEL_VERSION
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,24 +24,15 @@ CONFIG_PATH = os.path.join(APP_CONFIG_DIR, "config.json")
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(APP_CONFIG_DIR, exist_ok=True)
 
-def get_local_ip() -> str:
-    """Best-effort LAN IP detection without sending traffic."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-    except Exception:
-        ip = "127.0.0.1"
-    finally:
-        s.close()
-    return ip
-
-
 def main():
     logger = setup_logger(SERVER_LOG_PATH)
     stop_event = threading.Event()
-    host = "0.0.0.0"
-    port = 8000
+    # The dashboard and control API currently have no authentication.
+    # LAN access requires a selected private interface plus a second explicit acknowledgement.
+    try:
+        host, port = resolve_server_config(os.environ)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
 
     cfg_store = ConfigStore(path=CONFIG_PATH, initial=DEFAULT_CONFIG.copy())
     frame_buf = FrameBuffer()
@@ -81,16 +72,23 @@ def main():
         server_log_path=SERVER_LOG_PATH,
     )
 
-    local_ip = get_local_ip()
-
-    url_lan = f"http://{local_ip}:{port}/"
     url_local = f"http://127.0.0.1:{port}/"
 
     print("\n====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
-    print(f" LAN Web:    {url_lan}       open from other devices")
-    print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
+    if host != "127.0.0.1":
+        local_ip = host
+        url_lan = f"http://{local_ip}:{port}/"
+        print(f" LAN Web:    {url_lan}       open from trusted devices")
+        print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
+        print(" SECURITY WARNING: LAN dashboard/control endpoints have no authentication.")
+        print(" LAN access was explicitly acknowledged with SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1.")
+        print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
+    else:
+        print(" LAN access: disabled (loopback only)")
+        print(" To opt in, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
+        print(" SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
     print("====================================================================\n", flush=True)
 

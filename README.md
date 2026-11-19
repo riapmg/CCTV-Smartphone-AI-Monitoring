@@ -651,27 +651,37 @@ For developers who want to debug or modify features, the app can be built from s
 
 ### 4.1. Start the PC Side (Server + Dashboard) [⌃](#top)
 
-Run the following command in the project root directory:
+The dashboard and control API do not currently have authentication. The server therefore binds to loopback by default:
 
 ```bash
 python server.py
 ```
 
-After successful startup, you should see output similar to:
+This keeps the dashboard local to the PC at `http://127.0.0.1:8000/`; CamFlow on another device cannot connect in this mode.
 
-```
-===========================================================
-PhoneCam Server Started
-Local:   http://127.0.0.1:<PORT>/        for dashboard web  # Recommended address for browser
-LAN:     http://<LAN_IP>:<PORT>/         for CamFlow link   # Address for CamFlow device connection
-Default ingest: OFF (enable in dashboard)
-===========================================================
+#### Enable CamFlow access on a trusted LAN
 
-* Serving Flask app 'app.web.webapp'
-* Debug mode: off
+Only when the PC and phone are on a trusted, isolated Wi-Fi/LAN, explicitly opt in to one private RFC1918 IPv4 interface. Prefer the PC's specific LAN address (for example, `192.168.1.10`) so the service does not listen on every network interface:
+
+Linux / macOS:
+
+```bash
+SENTINEL_BIND_HOST=192.168.1.10 SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 python server.py
 ```
 
-> ⚠️ Important: The camera device must use the LAN address. If the server starts successfully but ingest is not enabled, the Live View being empty is normal behavior.
+Windows PowerShell:
+
+```powershell
+$env:SENTINEL_BIND_HOST = "192.168.1.10"
+$env:SENTINEL_ALLOW_UNAUTHENTICATED_LAN = "1"
+python server.py
+```
+
+Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected because the dashboard and control API do not yet have authentication. LAN mode now requires two explicit settings: the selected private interface and `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. The second setting is an acknowledgement, not authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
+
+The server prints the selected LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
+
+The default ingest and recording states remain OFF. Enable them manually in the dashboard only when you intend to receive a camera stream. An empty Live View before enabling ingest is expected.
 
 At this point, the PC-side service has started successfully.
 
