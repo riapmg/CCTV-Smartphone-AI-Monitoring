@@ -666,17 +666,18 @@ Only when the PC and phone are on a trusted, isolated Wi-Fi/LAN, explicitly opt 
 Linux / macOS:
 
 ```bash
-SENTINEL_BIND_HOST=192.168.1.10 python server.py
+SENTINEL_BIND_HOST=192.168.1.10 SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 python server.py
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:SENTINEL_BIND_HOST = "192.168.1.10"
+$env:SENTINEL_ALLOW_UNAUTHENTICATED_LAN = "1"
 python server.py
 ```
 
-Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected because the dashboard and control API do not yet have authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
+Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected because the dashboard and control API do not yet have authentication. LAN mode now requires two explicit settings: the selected private interface and `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. The second setting is an acknowledgement, not authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
 
 The server prints the selected LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
 
