@@ -28,7 +28,7 @@ def main():
     logger = setup_logger(SERVER_LOG_PATH)
     stop_event = threading.Event()
     # The dashboard and control API currently have no authentication.
-    # Bind to loopback by default; LAN access requires an explicit opt-in.
+    # LAN access requires a selected private interface plus a second explicit acknowledgement.
     try:
         host, port = resolve_server_config(os.environ)
     except ValueError as exc:
@@ -83,10 +83,12 @@ def main():
         print(f" LAN Web:    {url_lan}       open from trusted devices")
         print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
         print(" SECURITY WARNING: LAN dashboard/control endpoints have no authentication.")
+        print(" LAN access was explicitly acknowledged with SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1.")
         print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
     else:
         print(" LAN access: disabled (loopback only)")
-        print(" To opt in, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address before starting.")
+        print(" To opt in, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
+        print(" SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
     print("====================================================================\n", flush=True)
 
