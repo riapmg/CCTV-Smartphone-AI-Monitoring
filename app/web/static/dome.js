@@ -34,6 +34,9 @@
     monitorLabel: $('monitorLabel'),
     monitorUrl: $('monitorUrl'),
     monitorUrlRow: $('monitorUrlRow'),
+    cameraFinder: $('cameraFinder'),
+    cameraList: $('cameraList'),
+    monitorDiscover: $('monitorDiscover'),
     monitorSave: $('monitorSave'),
     monitorSnapshot: $('monitorSnapshot'),
     monitorInspect: $('monitorInspect'),
@@ -126,7 +129,9 @@
 
   function monitorState(monitor) {
     if (!monitor.feed) return 'empty';
-    if (feedKind(monitor.feed) === 'web') return 'web';
+    const kind = feedKind(monitor.feed);
+    if (kind === 'web') return 'web';
+    if (kind === 'camera' && !monitor.url) return 'setup';
     const health = lastData && lastData.health ? lastData.health[monitor.feed] : null;
     if (health && health.last_error) return 'error';
     return 'live';
@@ -324,7 +329,8 @@
   // ------------------------------------------------------------ mutations
 
   async function updateDome(patch) {
-    if (syncing) return;
+    if (!state) await load();
+    if (!state || syncing) return;
     syncing = true;
     const result = await fetchJson('/api/dome', {
       method: 'PUT',
@@ -397,6 +403,8 @@
   function updateUrlRow() {
     const feed = feedById(el.monitorFeed.value);
     el.monitorUrlRow.hidden = !(feed && (feed.options || []).indexOf('url') !== -1);
+    el.cameraFinder.hidden = !(feed && feed.kind === 'camera');
+    if (el.cameraFinder.hidden) el.cameraList.innerHTML = '';
   }
 
   function addOpenLink(url) {
@@ -462,7 +470,7 @@
     }
 
     if (kind === 'camera' && !monitor.url) {
-      el.monitorPreview.textContent = 'Set the RTSP stream URL below.';
+      el.monitorPreview.textContent = 'Set the RTSP stream URL below, or use Find ONVIF cameras.';
       return;
     }
 
@@ -595,10 +603,15 @@
   // --------------------------------------------------------------- events
 
   function bindEvents() {
-    el.pauseBtn.addEventListener('click', () => updateDome({ paused: !state.paused }));
-    el.hubPause.addEventListener('click', () => updateDome({ paused: !state.paused }));
+    el.pauseBtn.addEventListener('click', () => {
+      if (state) updateDome({ paused: !state.paused });
+    });
+    el.hubPause.addEventListener('click', () => {
+      if (state) updateDome({ paused: !state.paused });
+    });
 
     el.reverseBtn.addEventListener('click', () => {
+      if (!state) return;
       const current = Number(state.speed_dps) || 0;
       updateDome({ speed_dps: current === 0 ? -3 : -current });
     });
@@ -654,8 +667,48 @@
     el.monitorClose.addEventListener('click', closeMonitor);
     el.monitorFeed.addEventListener('change', updateUrlRow);
 
+    el.monitorDiscover.addEventListener('click', async () => {
+      el.cameraList.innerHTML = '';
+      const pending = document.createElement('li');
+      pending.className = 'control-note';
+      pending.textContent = 'Searching the LAN for ONVIF cameras…';
+      el.cameraList.appendChild(pending);
+      el.monitorDiscover.disabled = true;
+
+      const result = await fetchJson('/api/dome/cameras/discover?timeout=2');
+      el.monitorDiscover.disabled = false;
+      const data = (result.json && result.json.ok && result.json.data) || {};
+      const cameras = data.cameras || [];
+      el.cameraList.innerHTML = '';
+
+      if (!cameras.length) {
+        const none = document.createElement('li');
+        none.className = 'control-note';
+        none.textContent = 'No camera answered. Enter the stream URL manually.';
+        el.cameraList.appendChild(none);
+        return;
+      }
+
+      cameras.forEach((camera) => {
+        const item = document.createElement('li');
+        const pick = document.createElement('button');
+        pick.type = 'button';
+        pick.textContent = `${camera.name} · ${camera.host || 'unknown host'}`;
+        pick.addEventListener('click', () => {
+          const hints = camera.rtsp_hints || [];
+          const hint = hints[0] || (camera.host ? `rtsp://${camera.host}:554/` : '');
+          if (hint) el.monitorUrl.value = hint;
+          el.monitorMeta.textContent = hint
+            ? 'URL filled from discovery. Add the camera path and credentials, then Apply.'
+            : 'The camera answered but offered no RTSP address; enter the URL manually.';
+        });
+        item.appendChild(pick);
+        el.cameraList.appendChild(item);
+      });
+    });
+
     el.monitorSave.addEventListener('click', async () => {
-      if (!selectedId) return;
+      if (!selectedId || !state) return;
       const result = await fetchJson(`/api/dome/monitors/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

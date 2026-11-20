@@ -186,6 +186,7 @@ body.dome-page {
 .monitor-state[data-state="error"] { background: var(--bad); }
 .monitor-state[data-state="empty"] { background: #43536e; }
 .monitor-state[data-state="web"] { background: var(--accent); }
+.monitor-state[data-state="setup"] { background: var(--warn); }
 
 .dome-hub {
   position: absolute;
@@ -397,6 +398,16 @@ input[type="text"]:focus, select:focus { outline: none; border-color: var(--acce
 }
 
 .monitor-fields { margin-top: 2px; }
+
+.camera-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.camera-list li button { width: 100%; text-align: left; }
 
 /* ---- audit ---- */
 

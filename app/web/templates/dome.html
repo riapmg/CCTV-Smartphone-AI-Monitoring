@@ -130,6 +130,16 @@
             <div class="control-note">
               A URL with credentials stays in this device's runtime config, never in git.
             </div>
+
+            <div id="cameraFinder" hidden>
+              <div class="control-row">
+                <button type="button" id="monitorDiscover">Find ONVIF cameras</button>
+              </div>
+              <ul class="camera-list" id="cameraList"></ul>
+              <div class="control-note">
+                Discovery needs this server on the camera's LAN; otherwise type the URL above.
+              </div>
+            </div>
           </div>
         </div>
 

@@ -11,6 +11,7 @@ from flask import Flask, request, Response, jsonify, render_template
 from app.config.config_store import validate_and_normalize
 from app.ai.vision_client import client_signature, create_vision_client, safe_provider_info
 from app.dome.aria import AriaAssistant, build_router
+from app.dome.cameras import discover_cameras
 from app.dome.feeds import FEED_CATALOG, FeedHub, live_url_for
 from app.dome.store import DomeStore
 from app.recorder.recorder_worker import stop_recorder
@@ -171,6 +172,19 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
     def _aria_clear_audit():
         return {"message": aria.clear_audit()}
 
+    def _aria_discover_cameras():
+        cameras = discover_cameras(timeout=1.5, logger=logger)
+        if not cameras:
+            return {
+                "message": "No ONVIF camera answered. Discovery needs this server on the camera's "
+                "LAN; otherwise enter the stream URL in the monitor panel."
+            }
+        listing = ", ".join(f"{item['name']} ({item['host'] or 'unknown host'})" for item in cameras)
+        return {
+            "message": f"Found {len(cameras)} ONVIF camera(s): {listing}. "
+            "Pick one in a monitor's camera finder."
+        }
+
     router_cache = {"signature": None, "router": None}
 
     def _aria_router():
@@ -192,6 +206,7 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
             "snapshot": _aria_snapshot,
             "shutdown": _aria_shutdown,
             "clear_audit": _aria_clear_audit,
+            "discover_cameras": _aria_discover_cameras,
         },
         router_factory=_aria_router,
         audit_path=os.path.join(os.path.dirname(os.path.abspath(server_log_path)), "aria_audit.jsonl"),
@@ -510,6 +525,24 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
             "data": {
                 "feeds": [dict(feed) for feed in FEED_CATALOG],
                 "health": feed_hub.health(),
+            },
+        })
+
+    @app.get("/api/dome/cameras/discover")
+    def api_dome_cameras_discover():
+        try:
+            timeout = float(request.args.get("timeout", "1.5"))
+        except (TypeError, ValueError):
+            timeout = 1.5
+        cameras = discover_cameras(timeout=timeout, logger=logger)
+        return jsonify({
+            "ok": True,
+            "data": {
+                "cameras": cameras,
+                "note": (
+                    "ONVIF discovery uses UDP multicast, so the server must share the camera's "
+                    "LAN; otherwise enter the stream URL directly."
+                ),
             },
         })
 

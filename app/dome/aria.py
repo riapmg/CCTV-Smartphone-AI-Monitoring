@@ -51,6 +51,7 @@ ACTION_CLASSES: Dict[str, str] = {
     "status": "read_only",
     "brief": "read_only",
     "help": "read_only",
+    "discover_cameras": "read_only",
     "set_level": "safety",
     "set_safety": "safety",
     "shutdown": "irreversible",
@@ -73,7 +74,8 @@ CONFIDENCE_THRESHOLD = 0.55
 HELP_TEXT = (
     "I can run these dome commands locally: set fold to 6/8/12/16/24, pause or resume, "
     "speed N, angle N, refraction N, arrange feeds, assign <feed> to monitor N, "
-    "clear monitor N, enable or disable ingest, start or stop recording, snapshot, status. "
+    "clear monitor N, discover ONVIF cameras, enable or disable ingest, start or stop recording, "
+    "snapshot, status. "
     "Irreversible actions are proposed and wait for your confirmation."
 )
 
@@ -203,6 +205,11 @@ class IntentParser:
 
         if re.search(r"\b(?:help|what can you do|commands)\b", low):
             return Intent("help", {}, 0.95, "Explain the available commands")
+
+        if re.search(r"\b(?:find|discover|scan for|search for|look for)\b.*\bcameras?\b", low) or re.search(
+            r"\b(?:onvif|ip cameras?)\b.*\b(?:discover|scan|find)\b", low
+        ):
+            return Intent("discover_cameras", {}, 0.9, "Discover ONVIF cameras on the network")
 
         if re.search(r"\b(?:status|briefing|summary|what(?:'s| is) (?:showing|on the dome)|overview)\b", low):
             return Intent("status", {}, 0.9, "Report the dome status")
@@ -501,7 +508,7 @@ SYSTEM_PROMPT = (
     "You cannot execute anything yourself: an autonomy gate in the dashboard runs commands. "
     "Never claim an action was executed. Available commands: set fold to 6/8/12/16/24, "
     "pause/resume, speed N, angle N, refraction N, arrange feeds, "
-    "assign <feed> to monitor N, clear monitor N, enable/disable ingest, "
+    "assign <feed> to monitor N, clear monitor N, discover ONVIF cameras, enable/disable ingest, "
     "start/stop recording, snapshot, status. Keep answers short and concrete."
 )
 

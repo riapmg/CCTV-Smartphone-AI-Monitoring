@@ -32,7 +32,15 @@ NASA_LIVE_URL = "https://www.nasa.gov/live/"
 
 
 class FeedError(Exception):
-    """The feed cannot be produced right now. The text is shown in the UI."""
+    """The feed cannot be produced right now. The text is shown in the UI.
+
+    `config` marks a monitor that is not set up yet (no stream URL) rather than
+    a link that is failing; that distinction keeps the dome's link badge honest.
+    """
+
+    def __init__(self, message: str, config: bool = False):
+        super().__init__(message)
+        self.config = config
 
 
 FEED_CATALOG: Tuple[Dict[str, Any], ...] = (
@@ -203,15 +211,29 @@ class FeedHub:
                 {"feed": feed_id, "error": "no feed assigned"},
             )
 
+        if feed["kind"] == "web":
+            # A web page lives in the detail panel; the tile is just a label, so
+            # it must not count as a failing link on the dome.
+            return (
+                self._placeholder(f"{feed['label']}: open the detail panel", width),
+                "image/jpeg",
+                {
+                    "feed": feed_id,
+                    "note": "web pages open in the detail panel",
+                    "attribution": feed.get("attribution", ""),
+                },
+            )
+
         started = self._clock()
         try:
             data, ctype, meta = self._render(feed, monitor, max(160, min(1600, int(width))))
         except FeedError as exc:
-            self._record(feed_id, False, str(exc), started)
+            if not exc.config:
+                self._record(feed_id, False, str(exc), started)
             return (
                 self._placeholder(f"{feed['label']}: {exc}", width),
                 "image/jpeg",
-                {"feed": feed_id, "error": str(exc)},
+                {"feed": feed_id, "error": str(exc), "config": exc.config},
             )
         self._record(feed_id, True, "", started)
         meta = dict(meta)
@@ -239,7 +261,7 @@ class FeedHub:
         if kind == "camera":
             return self._rtsp(monitor.get("url"), width)
         if kind == "web":
-            raise FeedError("web pages open in the detail panel")
+            raise FeedError("web pages open in the detail panel", config=True)
         raise FeedError("unsupported feed")
 
     def _camflow(self, width: int):
@@ -351,9 +373,9 @@ class FeedHub:
         try:
             url = validate_feed_url(url or "")
         except ValueError as exc:
-            raise FeedError(str(exc)) from exc
+            raise FeedError(str(exc), config=True) from exc
         if not url:
-            raise FeedError("set the camera stream URL on this monitor")
+            raise FeedError("set the camera stream URL on this monitor", config=True)
 
         cache_key = f"rtsp:{url}"
         cached = self._cache_get(cache_key)

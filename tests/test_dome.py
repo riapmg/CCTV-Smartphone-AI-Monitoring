@@ -11,6 +11,7 @@ from app.core.upload_stats import UploadStats
 from app.dome.aria import (
     AriaAssistant,
     Provider,
+    IntentParser,
     ProviderRouter,
     RequestError,
     RouterError,
@@ -18,7 +19,8 @@ from app.dome.aria import (
     decide,
     match_feed,
 )
-from app.dome.feeds import FEED_BY_ID
+from app.dome.cameras import discover_cameras, parse_probe_match
+from app.dome.feeds import FEED_BY_ID, FeedHub
 from app.dome.store import DomeStore
 from app.web.webapp import create_app
 
@@ -420,3 +422,108 @@ def test_monitor_inspect_reports_a_missing_model(tmp_path, monkeypatch):
 
     assert response.status_code == 400
     assert "AI model is required" in response.get_json()["error"]
+
+
+# ---------------------------------------------------------- ONVIF discovery
+
+PROBE_MATCH = """<?xml version="1.0" encoding="UTF-8"?>
+<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"
+            xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+            xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+            xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
+  <e:Header/>
+  <e:Body>
+    <d:ProbeMatches>
+      <d:ProbeMatch>
+        <w:EndpointReference>
+          <w:Address>urn:uuid:2c4a7b3e-0000-4000-8000-000000000001</w:Address>
+        </w:EndpointReference>
+        <d:Types>dn:NetworkVideoTransmitter</d:Types>
+        <d:Scopes>onvif://www.onvif.org/name/Front%20Door onvif://www.onvif.org/hardware/DS-2CD</d:Scopes>
+        <d:XAddrs>http://192.168.1.64/onvif/device_service</d:XAddrs>
+        <d:MetadataVersion>1</d:MetadataVersion>
+      </d:ProbeMatch>
+    </d:ProbeMatches>
+  </e:Body>
+</e:Envelope>"""
+
+
+def test_probe_match_parses_name_host_and_rtsp_hint():
+    camera = parse_probe_match(PROBE_MATCH)
+
+    assert camera["name"] == "Front Door"
+    assert camera["host"] == "192.168.1.64"
+    assert camera["endpoint"].endswith("0001")
+    assert camera["rtsp_hints"] == ["rtsp://192.168.1.64:554/"]
+    assert camera["scopes"]["hardware"] == "DS-2CD"
+
+
+def test_discovery_skips_garbage_and_dedupes():
+    responses = [PROBE_MATCH, PROBE_MATCH, "not xml at all"]
+    cameras = discover_cameras(timeout=0.2, transport=lambda payload, timeout: responses)
+
+    assert len(cameras) == 1
+    assert cameras[0]["name"] == "Front Door"
+
+
+def test_discovery_without_answers_is_empty():
+    assert discover_cameras(timeout=0.2, transport=lambda payload, timeout: []) == []
+
+
+def test_camera_discovery_endpoint(tmp_path, monkeypatch):
+    import app.web.webapp as webapp
+
+    monkeypatch.setattr(
+        webapp,
+        "discover_cameras",
+        lambda timeout=1.5, logger=None: [
+            {"name": "Front Door", "host": "192.168.1.64", "rtsp_hints": ["rtsp://192.168.1.64:554/"]}
+        ],
+    )
+    client = _make_test_client(tmp_path)
+    body = client.get("/api/dome/cameras/discover").get_json()
+
+    assert body["ok"] is True
+    assert body["data"]["cameras"][0]["host"] == "192.168.1.64"
+    assert "LAN" in body["data"]["note"]
+
+
+def test_aria_can_discover_cameras(tmp_path):
+    dome = _dome(tmp_path)
+    calls = []
+
+    def discover():
+        calls.append("discover")
+        return {"message": "Found 1 ONVIF camera: Front Door (192.168.1.64)."}
+
+    assistant = _assistant(tmp_path, dome, actions={"discover_cameras": discover})
+    result = assistant.chat("find cameras")
+
+    assert result["decisions"][0]["decision"] == "allow"
+    assert "Front Door" in result["reply"]
+    assert calls == ["discover"]
+
+
+def test_assign_intent_still_wins_over_discovery():
+    parser = IntentParser()
+    intent = parser.parse("assign ip camera to monitor 2")
+    assert intent.action == "assign_feed"
+
+
+def test_web_feed_tile_is_not_counted_as_a_broken_link(tmp_path):
+    hub = FeedHub(FrameBuffer())
+    data, content_type, meta = hub.tile({"id": "m1", "feed": "web", "url": "https://example.com"}, width=320)
+
+    assert data[:2] == b"\xff\xd8"
+    assert content_type == "image/jpeg"
+    assert "error" not in meta
+    assert hub.health() == {}
+
+
+def test_unconfigured_camera_is_not_counted_as_a_broken_link(tmp_path):
+    hub = FeedHub(FrameBuffer())
+    data, _content_type, meta = hub.tile({"id": "m1", "feed": "rtsp", "url": ""}, width=320)
+
+    assert data[:2] == b"\xff\xd8"
+    assert meta["config"] is True
+    assert hub.health() == {}

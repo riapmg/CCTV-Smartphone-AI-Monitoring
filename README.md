@@ -65,6 +65,7 @@ This project can be used both as a lightweight local monitoring system and as an
   - [2.2. System Parameter Customization](#sec22)
   - [2.3. AI Triggered Monitoring & Controllable Cognitive Output](#sec23)
   - [2.4. Mobile Camera Capture App (CamFlow)](#sec24)
+  - [2.5. Kaleidophone Dome & ARIIA](#sec25)
 
 - [3. Project Deployment](#sec3)
   - [3.1. Environment Requirements](#sec31)
@@ -418,6 +419,19 @@ enabling the construction of a real-time vision system without additional hardwa
 </table>
 
 > 📘 For detailed functionality and usage instructions, please refer to **[CamFlow User Guide](CamFlow_UserGuide_CN.md)**.
+
+---
+
+<a id="sec25"></a>
+
+### 2.5. Kaleidophone Dome & ARIIA [⌃](#top)
+
+`/dome` turns the live feed into a symmetry stage: the dome is split into 6, 8, 12, 16 or 24 sectors, and every sector owns an **individual monitor** with its own feed, label and URL. Layout state is stored next to the dashboard config (`app/config/dome.json`) and survives restarts.
+
+- **Feeds**: the CamFlow stream, NASA GIBS Terra/Aqua/VIIRS true colour, NASA EPIC full-disc Earth, NASA Live, any RTSP/ONVIF camera and any web page.
+- **Transport**: tiles are rendered server-side (`/api/dome/monitors/<id>/tile.jpg`), so a slow or failing source becomes a labelled placeholder instead of a black tile. Per-feed health, bounded timeouts, retries and a circuit breaker keep the dome responsive.
+- **ARIIA**: the assistant behind `/api/dome/aria` parses dome commands locally and routes free-form questions to the configured AI provider. The autonomy gate is fail-closed: reversible local actions run from level 2, irreversible actions are proposed and confirmed, safety settings are never autonomous, and every decision is written to `log/aria_audit.jsonl`.
+- **ONVIF discovery**: *Find ONVIF cameras* in a monitor's detail panel sends a WS-Discovery probe and fills the RTSP URL of the camera you pick. It needs the server on the camera's LAN (a bridge-network container cannot see the multicast group), so the URL can always be typed by hand.
 
 ---
 
