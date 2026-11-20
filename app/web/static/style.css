@@ -41,6 +41,17 @@ pre { background: #f7f7f7; padding: 10px; border-radius: 10px; overflow: auto; m
   padding-top: 6px;
 }
 
+.topbar-link{
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #77a7ff;
+  background: #e9f2ff;
+  color: #12305e;
+  text-decoration: none;
+  font-size: 14px;
+}
+.topbar-link:hover{ background: #dbe9ff; }
+
 .layout{
   display: flex;
   gap: 0;

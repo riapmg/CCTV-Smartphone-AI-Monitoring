@@ -9,7 +9,10 @@ import numpy as np
 from flask import Flask, request, Response, jsonify, render_template
 
 from app.config.config_store import validate_and_normalize
-from app.ai.vision_client import safe_provider_info
+from app.ai.vision_client import client_signature, create_vision_client, safe_provider_info
+from app.dome.aria import AriaAssistant, build_router
+from app.dome.feeds import FEED_CATALOG, FeedHub, live_url_for
+from app.dome.store import DomeStore
 from app.recorder.recorder_worker import stop_recorder
 from app.version import RELEASE_DATE, SENTINEL_VERSION, version_info
 
@@ -40,6 +43,160 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
     app = Flask(__name__, template_folder=templates_dir, static_folder=static_dir)
     # Leave room for multipart metadata while enforcing an explicit image limit below.
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES + 1024 * 1024
+
+    # ------------------------------------------------------------------
+    # Kaleidophone dome + ARIIA assistant
+    # ------------------------------------------------------------------
+    dome_path = os.path.join(os.path.dirname(os.path.abspath(cfg_store.path)), "dome.json")
+    dome_store = DomeStore(path=dome_path, logger=logger)
+    feed_hub = FeedHub(frame_buf)
+
+    def _set_ingest(enabled: bool) -> bool:
+        cfg_store.set_key("ingest_enabled", bool(enabled))
+        if not enabled:
+            # Clear the last frame so /stream goes back to the placeholder screen.
+            frame_buf.clear()
+        cfg = cfg_store.get_copy()
+        if bool(cfg.get("autosave", True)):
+            cfg_store.save_to_disk(logger)
+        logger.info("ingest enabled" if enabled else "ingest disabled")
+        return bool(enabled)
+
+    def _set_recording(enabled: bool) -> bool:
+        cfg_store.set_key("recording", bool(enabled))
+        cfg = cfg_store.get_copy()
+        if bool(cfg.get("autosave", True)):
+            cfg_store.save_to_disk(logger)
+        if enabled:
+            with rec_rt.lock:
+                rec_rt.recording_start_ts = time.time()
+            logger.info("recording started")
+        else:
+            stop_recorder(rec_rt, logger)
+            with rec_rt.lock:
+                rec_rt.recording_start_ts = None
+            logger.info("recording stopped")
+        return bool(enabled)
+
+    def _snapshot_path(base_root: str = "recordings"):
+        now = datetime.now()
+        snap_root = os.path.join(base_root, "snapshots")
+        day_dir = os.path.join(snap_root, now.strftime("%Y%m%d"))
+        os.makedirs(day_dir, exist_ok=True)
+        fname = f"snapshot_{now.strftime('%Y%m%d_%H%M%S')}.jpg"
+        return os.path.join(day_dir, fname)
+
+    def _take_snapshot():
+        frame = frame_buf.get_copy()
+        if frame is None:
+            return False, "no frame"
+        cfg = cfg_store.get_copy()
+        path = _snapshot_path(str(cfg.get("out_root", "recordings")))
+        ok = cv2.imwrite(path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        if not ok:
+            return False, "write failed"
+        logger.info(f"snapshot saved: {path}")
+        return True, path
+
+    def _shutdown_now():
+        logger.warning("Shutdown requested from web UI")
+
+        # Graceful shutdown order
+        try:
+            cfg_store.set_key("recording", False)
+            stop_recorder(rec_rt, logger)
+            with rec_rt.lock:
+                rec_rt.recording_start_ts = None
+        except Exception as e:
+            logger.warning(f"shutdown: stop recorder failed: {e}")
+
+        try:
+            cfg_store.set_key("ingest_enabled", False)
+        except Exception as e:
+            logger.warning(f"shutdown: disable ingest failed: {e}")
+
+        # Save config if autosave
+        try:
+            cfg = cfg_store.get_copy()
+            if bool(cfg.get("autosave", True)):
+                cfg_store.save_to_disk(logger)
+        except Exception as e:
+            logger.warning(f"shutdown: save config failed: {e}")
+
+        # Signal workers to exit
+        try:
+            stop_event.set()
+        except Exception as e:
+            logger.warning(f"shutdown: set stop_event failed: {e}")
+
+        # Best-effort join so writers flush more cleanly
+        try:
+            for _, t in (threads or {}).items():
+                if t and t.is_alive():
+                    t.join(timeout=2.0)
+        except Exception as e:
+            logger.warning(f"shutdown: join threads failed: {e}")
+
+        # Hard-exit fallback (avoid hanging)
+        def _killer():
+            time.sleep(0.2)
+            os._exit(0)
+
+        threading.Thread(target=_killer, daemon=True).start()
+
+    def _aria_ingest_on():
+        _set_ingest(True)
+        return {"message": "CamFlow ingest enabled."}
+
+    def _aria_ingest_off():
+        _set_ingest(False)
+        return {"message": "CamFlow ingest disabled."}
+
+    def _aria_record_start():
+        _set_recording(True)
+        return {"message": "Recording started."}
+
+    def _aria_record_stop():
+        _set_recording(False)
+        return {"message": "Recording stopped."}
+
+    def _aria_snapshot():
+        ok, detail = _take_snapshot()
+        return {"message": f"Snapshot saved to {detail}." if ok else f"Snapshot failed: {detail}"}
+
+    def _aria_shutdown():
+        _shutdown_now()
+        return {"message": "Shutting the Sentinel server down."}
+
+    def _aria_clear_audit():
+        return {"message": aria.clear_audit()}
+
+    router_cache = {"signature": None, "router": None}
+
+    def _aria_router():
+        """Keep one router per AI configuration so circuit breakers survive calls."""
+        cfg = cfg_store.get_copy()
+        signature = f"{client_signature(cfg)}|{os.environ.get('ARIA_FALLBACK_PROVIDERS', '')}"
+        if router_cache["signature"] != signature:
+            router_cache["router"] = build_router(cfg)
+            router_cache["signature"] = signature
+        return router_cache["router"]
+
+    aria = AriaAssistant(
+        dome=dome_store,
+        app_actions={
+            "ingest_on": _aria_ingest_on,
+            "ingest_off": _aria_ingest_off,
+            "record_start": _aria_record_start,
+            "record_stop": _aria_record_stop,
+            "snapshot": _aria_snapshot,
+            "shutdown": _aria_shutdown,
+            "clear_audit": _aria_clear_audit,
+        },
+        router_factory=_aria_router,
+        audit_path=os.path.join(os.path.dirname(os.path.abspath(server_log_path)), "aria_audit.jsonl"),
+        logger=logger,
+    )
 
     # Disable Werkzeug access logs (keep your original behavior)
     import logging as _logging
@@ -191,125 +348,35 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
 
     @app.post("/api/ingest/enable")
     def api_ingest_enable():
-        cfg_store.set_key("ingest_enabled", True)
-        cfg = cfg_store.get_copy()
-        if bool(cfg.get("autosave", True)):
-            cfg_store.save_to_disk(logger)
-        logger.info("ingest enabled")
+        _set_ingest(True)
         return jsonify({"ok": True, "ingest_enabled": True})
 
     @app.post("/api/ingest/disable")
     def api_ingest_disable():
-        cfg_store.set_key("ingest_enabled", False)
-
-        # Key behavior: clear the last frame so /stream goes back to placeholder screen.
-        frame_buf.clear()
-
-        cfg = cfg_store.get_copy()
-        if bool(cfg.get("autosave", True)):
-            cfg_store.save_to_disk(logger)
-        logger.info("ingest disabled")
+        _set_ingest(False)
         return jsonify({"ok": True, "ingest_enabled": False})
 
     @app.post("/api/record/start")
     def api_record_start():
-        cfg_store.set_key("recording", True)
-        cfg = cfg_store.get_copy()
-        if bool(cfg.get("autosave", True)):
-            cfg_store.save_to_disk(logger)
-
-        with rec_rt.lock:
-            rec_rt.recording_start_ts = time.time()
-
-        logger.info("recording started")
+        _set_recording(True)
         return jsonify({"ok": True, "recording": True, "note": ""})
 
     @app.post("/api/record/stop")
     def api_record_stop():
-        cfg_store.set_key("recording", False)
-        cfg = cfg_store.get_copy()
-        if bool(cfg.get("autosave", True)):
-            cfg_store.save_to_disk(logger)
-
-        stop_recorder(rec_rt, logger)
-        with rec_rt.lock:
-            rec_rt.recording_start_ts = None
-
-        logger.info("recording stopped")
+        _set_recording(False)
         return jsonify({"ok": True, "recording": False})
-
-    def _snapshot_path(base_root: str = "recordings"):
-        now = datetime.now()
-        snap_root = os.path.join(base_root, "snapshots")
-        day_dir = os.path.join(snap_root, now.strftime("%Y%m%d"))
-        os.makedirs(day_dir, exist_ok=True)
-        fname = f"snapshot_{now.strftime('%Y%m%d_%H%M%S')}.jpg"
-        return os.path.join(day_dir, fname)
 
     @app.post("/api/system/shutdown")
     def api_system_shutdown():
-        logger.warning("Shutdown requested from web UI")
-
-        # Graceful shutdown order
-        try:
-            cfg_store.set_key("recording", False)
-            stop_recorder(rec_rt, logger)
-            with rec_rt.lock:
-                rec_rt.recording_start_ts = None
-        except Exception as e:
-            logger.warning(f"shutdown: stop recorder failed: {e}")
-
-        try:
-            cfg_store.set_key("ingest_enabled", False)
-        except Exception as e:
-            logger.warning(f"shutdown: disable ingest failed: {e}")
-
-        # Save config if autosave
-        try:
-            cfg = cfg_store.get_copy()
-            if bool(cfg.get("autosave", True)):
-                cfg_store.save_to_disk(logger)
-        except Exception as e:
-            logger.warning(f"shutdown: save config failed: {e}")
-
-        # Signal workers to exit
-        try:
-            stop_event.set()
-        except Exception as e:
-            logger.warning(f"shutdown: set stop_event failed: {e}")
-
-        # Best-effort join so writers flush more cleanly
-        try:
-            for _, t in (threads or {}).items():
-                if t and t.is_alive():
-                    t.join(timeout=2.0)
-        except Exception as e:
-            logger.warning(f"shutdown: join threads failed: {e}")
-
-        # Hard-exit fallback (avoid hanging)
-        def _killer():
-            time.sleep(0.2)
-            os._exit(0)
-
-        threading.Thread(target=_killer, daemon=True).start()
+        _shutdown_now()
         return jsonify({"ok": True, "message": "shutting down"})
 
     @app.post("/api/snapshot")
     def api_snapshot():
-        frame = frame_buf.get_copy()
-        if frame is None:
-            return jsonify({"ok": False, "error": "no frame"}), 409
-
-        cfg = cfg_store.get_copy()
-        base_root = str(cfg.get("out_root", "recordings"))
-        path = _snapshot_path(base_root)
-
-        ok = cv2.imwrite(path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+        ok, detail = _take_snapshot()
         if not ok:
-            return jsonify({"ok": False, "error": "write failed"}), 500
-
-        logger.info(f"snapshot saved: {path}")
-        return jsonify({"ok": True, "path": path})
+            return jsonify({"ok": False, "error": detail}), (409 if detail == "no frame" else 500)
+        return jsonify({"ok": True, "path": detail})
 
     @app.get("/api/status")
     def api_status():
@@ -400,5 +467,177 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
             return jsonify({"ok": True, "data": [ln.rstrip("\n") for ln in lines]})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
+
+    # ------------------------------------------------------------------
+    # Kaleidophone dome page and API
+    # ------------------------------------------------------------------
+    def _dome_state():
+        state = dome_store.snapshot()
+        for monitor in state["monitors"]:
+            monitor["live_url"] = live_url_for(monitor)
+        return state
+
+    @app.get("/dome")
+    def dome_page():
+        return render_template(
+            "dome.html",
+            sentinel_version=SENTINEL_VERSION,
+            release_date=RELEASE_DATE,
+        )
+
+    @app.get("/api/dome")
+    def api_dome():
+        cfg = cfg_store.get_copy()
+        return jsonify({
+            "ok": True,
+            "data": {
+                "state": _dome_state(),
+                "feeds": [dict(feed) for feed in FEED_CATALOG],
+                "health": feed_hub.health(),
+                "aria": aria.status(),
+                "app": {
+                    "ingest_enabled": bool(cfg.get("ingest_enabled")),
+                    "recording": bool(cfg.get("recording")),
+                    "ai_enabled": bool(cfg.get("ai_enabled")),
+                },
+            },
+        })
+
+    @app.get("/api/dome/feeds")
+    def api_dome_feeds():
+        return jsonify({
+            "ok": True,
+            "data": {
+                "feeds": [dict(feed) for feed in FEED_CATALOG],
+                "health": feed_hub.health(),
+            },
+        })
+
+    @app.put("/api/dome")
+    def api_dome_update():
+        patch = request.get_json(silent=True) or {}
+        try:
+            state = dome_store.update(patch)
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": True, "data": _dome_state()})
+
+    @app.put("/api/dome/monitors/<monitor_id>")
+    def api_dome_assign(monitor_id):
+        patch = request.get_json(silent=True) or {}
+        try:
+            state = dome_store.assign(monitor_id, patch)
+        except KeyError:
+            return jsonify({"ok": False, "error": "monitor not found"}), 404
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        for monitor in state["monitors"]:
+            monitor["live_url"] = live_url_for(monitor)
+        return jsonify({"ok": True, "data": state})
+
+    @app.get("/api/dome/monitors/<monitor_id>/tile.jpg")
+    def api_dome_tile(monitor_id):
+        monitor = dome_store.monitor(monitor_id)
+        if monitor is None:
+            return "monitor not found", 404
+        try:
+            width = int(request.args.get("w", "640"))
+        except (TypeError, ValueError):
+            width = 640
+        data, content_type, meta = feed_hub.tile(monitor, width=width)
+        response = Response(data or b"", mimetype=content_type or "image/jpeg")
+        response.headers["Cache-Control"] = "no-store"
+        if meta.get("error"):
+            safe_error = str(meta["error"]).encode("ascii", "ignore").decode("ascii")
+            response.headers["X-Feed-Error"] = safe_error[:200]
+        for header, key in (
+            ("X-Feed-Source", "source"),
+            ("X-Feed-Observed", "observation_date"),
+            ("X-Feed-Captured", "captured"),
+        ):
+            if meta.get(key):
+                response.headers[header] = str(meta[key]).encode("ascii", "ignore").decode("ascii")[:120]
+        return response
+
+    @app.post("/api/dome/monitors/<monitor_id>/snapshot")
+    def api_dome_monitor_snapshot(monitor_id):
+        monitor = dome_store.monitor(monitor_id)
+        if monitor is None:
+            return jsonify({"ok": False, "error": "monitor not found"}), 404
+        data, _content_type, meta = feed_hub.tile(monitor, width=1280)
+        if meta.get("error"):
+            return jsonify({"ok": False, "error": meta["error"]}), 409
+        now = datetime.now()
+        directory = os.path.join("recordings", "snapshots", "dome", now.strftime("%Y%m%d"))
+        os.makedirs(directory, exist_ok=True)
+        path = os.path.join(directory, f"{monitor_id}_{now.strftime('%H%M%S')}.jpg")
+        with open(path, "wb") as handle:
+            handle.write(data)
+        logger.info(f"dome snapshot saved: {path}")
+        return jsonify({"ok": True, "path": path})
+
+    @app.post("/api/dome/monitors/<monitor_id>/inspect")
+    def api_dome_monitor_inspect(monitor_id):
+        monitor = dome_store.monitor(monitor_id)
+        if monitor is None:
+            return jsonify({"ok": False, "error": "monitor not found"}), 404
+        data, _content_type, meta = feed_hub.tile(monitor, width=640)
+        if meta.get("error"):
+            return jsonify({"ok": False, "error": meta["error"]}), 409
+        frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"ok": False, "error": "tile could not be decoded"}), 409
+        try:
+            client = create_vision_client(cfg_store.get_copy())
+            result = client.analyze_frame(
+                frame,
+                time_text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                prompt_template="You are inspecting one tile of a monitoring dome. Describe what is visible.",
+                jpeg_quality=85,
+                max_w=640,
+            )
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": True, "data": result})
+
+    @app.post("/api/dome/aria")
+    def api_dome_aria():
+        body = request.get_json(silent=True) or {}
+        message = str(body.get("message") or "").strip()
+        if not message:
+            return jsonify({"ok": False, "error": "message is required"}), 400
+        level = body.get("level")
+        try:
+            level = int(level) if level is not None else None
+        except (TypeError, ValueError):
+            level = None
+        return jsonify(aria.chat(message, level=level))
+
+    @app.put("/api/dome/aria/level")
+    def api_dome_aria_level():
+        body = request.get_json(silent=True) or {}
+        try:
+            level = aria.set_level(int(body.get("level", 2)))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "level must be 1 to 4"}), 400
+        return jsonify({"ok": True, "level": level})
+
+    @app.post("/api/dome/aria/confirm")
+    def api_dome_aria_confirm():
+        body = request.get_json(silent=True) or {}
+        return jsonify(aria.confirm(str(body.get("id") or "")))
+
+    @app.get("/api/dome/aria/audit")
+    def api_dome_aria_audit():
+        n = request.args.get("n", "50")
+        try:
+            n = int(n)
+        except (TypeError, ValueError):
+            n = 50
+        return jsonify({"ok": True, "data": aria.audit(n)})
+
+    @app.delete("/api/dome/aria/audit")
+    def api_dome_aria_audit_clear():
+        return jsonify({"ok": True, "message": aria.clear_audit()})
 
     return app

@@ -31,7 +31,9 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app server.py tests
       - name: Check dashboard JavaScript syntax
-        run: node --check app/web/static/dashboard.js
+        run: |
+          node --check app/web/static/dashboard.js
+          node --check app/web/static/dome.js
 
   android:
     name: Android unit tests and debug APK

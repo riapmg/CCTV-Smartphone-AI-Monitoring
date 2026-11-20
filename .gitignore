@@ -27,6 +27,7 @@ recordings/*
 
 # Local configuration files
 app/config/config.json
+app/config/dome.json
 
 # System files
 .DS_Store

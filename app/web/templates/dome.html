@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Kaleidophone Dome · Sentinel</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='dome.css') }}">
+</head>
+
+<body class="dome-page">
+  <header class="dome-top">
+    <div class="brand">
+      <div class="brand-title">Kaleidophone Dome</div>
+      <div class="brand-subtitle" id="domeSubtitle">ARIIA-assisted symmetry dome</div>
+    </div>
+    <div class="dome-top-actions">
+      <span class="badge" id="appBadge">ingest: off · rec: off</span>
+      <span class="badge" id="linkBadge" data-state="ok">link: ok</span>
+      <a class="nav-link" href="/dashboard">Dashboard</a>
+    </div>
+  </header>
+
+  <main class="dome-layout">
+    <section class="dome-main">
+      <div class="dome-stage" id="domeStage" role="img" aria-label="Kaleidophone dome with individual monitors">
+        <div class="dome-face" id="domeFace" aria-hidden="true"></div>
+        <div class="dome-sheen" aria-hidden="true"></div>
+        <div class="dome-ring" id="domeRing"></div>
+        <div class="dome-hub">
+          <div class="hub-fold" id="hubFold">8</div>
+          <div class="hub-sub" id="hubSector">45° sectors</div>
+          <button class="hub-btn" id="hubPause" type="button" aria-pressed="false">Pause</button>
+          <div class="hub-angle" id="hubAngle">0°</div>
+        </div>
+      </div>
+
+      <div class="dome-controls">
+        <div class="control">
+          <div class="control-head">
+            <span>Symmetry</span>
+            <span class="control-value" id="foldValue">8-fold</span>
+          </div>
+          <div class="chips" id="foldChips" role="group" aria-label="Symmetry fold count"></div>
+        </div>
+
+        <div class="control">
+          <div class="control-head">
+            <span>Rotation</span>
+            <span class="control-value" id="speedValue">3.0°/s</span>
+          </div>
+          <input id="speedRange" type="range" min="-30" max="30" step="0.5" value="3"
+                 aria-label="Rotation speed in degrees per second"/>
+          <div class="control-row">
+            <button type="button" id="reverseBtn">Reverse</button>
+            <button type="button" id="zeroBtn">0°/s</button>
+            <button type="button" id="pauseBtn">Pause</button>
+          </div>
+        </div>
+
+        <div class="control">
+          <div class="control-head">
+            <span>Angle</span>
+            <span class="control-value" id="angleValue">0°</span>
+          </div>
+          <input id="angleRange" type="range" min="0" max="359" step="1" value="0"
+                 aria-label="Dome angle in degrees"/>
+          <div class="control-note">0° is the top of the dome; the readout wraps at 360°.</div>
+        </div>
+
+        <div class="control">
+          <div class="control-head">
+            <span>Refraction</span>
+            <span class="control-value" id="refractValue">35%</span>
+          </div>
+          <input id="refractRange" type="range" min="0" max="100" step="1" value="35"
+                 aria-label="Refraction visual amount"/>
+          <div class="control-note">Visual lens effect, not an optical measurement.</div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="dome-side">
+      <section class="card aria-card">
+        <div class="card-head">
+          <b>ARIIA assistant</b>
+          <span class="badge" id="ariaLevelBadge">L2 semi-autonomous</span>
+        </div>
+
+        <label class="field-label" for="ariaLevel">Autonomy level</label>
+        <select id="ariaLevel">
+          <option value="1">1 · Assisted — suggests only</option>
+          <option value="2" selected>2 · Semi-autonomous</option>
+          <option value="3">3 · Fully autonomous</option>
+          <option value="4">4 · Bounded self-tuning</option>
+        </select>
+
+        <div class="aria-log" id="ariaLog" aria-live="polite">
+          <div class="bubble aria">
+            <p>I can rearrange the dome, change symmetry, rotation and feeds, and run the
+              dashboard's own controls. Ask me for a briefing, or try “arrange feeds”.</p>
+          </div>
+        </div>
+
+        <form class="aria-form" id="ariaForm">
+          <input id="ariaInput" type="text" autocomplete="off" placeholder="e.g. set fold to 12"/>
+          <button type="submit" class="primary">Send</button>
+        </form>
+        <div class="control-note" id="ariaProvider">local rules only</div>
+      </section>
+
+      <section class="card monitor-card" id="monitorCard" hidden>
+        <div class="card-head">
+          <b>Monitor <span id="monitorTitle">m1</span></b>
+          <button type="button" class="icon-btn" id="monitorClose" aria-label="Close monitor details">×</button>
+        </div>
+
+        <div class="monitor-preview" id="monitorPreview"></div>
+
+        <div class="monitor-fields">
+          <label class="field-label" for="monitorFeed">Feed</label>
+          <select id="monitorFeed"></select>
+
+          <label class="field-label" for="monitorLabel">Label</label>
+          <input id="monitorLabel" type="text" maxlength="80"/>
+
+          <div id="monitorUrlRow" hidden>
+            <label class="field-label" for="monitorUrl">Stream / page URL</label>
+            <input id="monitorUrl" type="text"
+                   placeholder="rtsp://192.168.1.64:554/Streaming/Channels/101"/>
+            <div class="control-note">
+              A URL with credentials stays in this device's runtime config, never in git.
+            </div>
+          </div>
+        </div>
+
+        <div class="control-row">
+          <button type="button" class="primary" id="monitorSave">Apply</button>
+          <button type="button" id="monitorSnapshot">Snapshot</button>
+          <button type="button" id="monitorInspect">AI inspect</button>
+          <button type="button" id="monitorClear">Clear</button>
+        </div>
+        <div class="control-note" id="monitorMeta"></div>
+      </section>
+
+      <section class="card audit-card">
+        <div class="card-head">
+          <b>Decision audit</b>
+          <button type="button" class="icon-btn" id="auditClear" aria-label="Clear decision audit">clear</button>
+        </div>
+        <ul class="audit-list" id="auditList">
+          <li class="control-note">loading…</li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="dome-footer">
+    <span>Sentinel · Kaleidophone Dome</span>
+    <span>·</span>
+    <span>v{{ sentinel_version }}</span>
+    <span>·</span>
+    <span>{{ release_date }}</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='dome.js') }}"></script>
+</body>
+</html>
