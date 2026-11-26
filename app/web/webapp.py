@@ -12,6 +12,7 @@ from app.config.config_store import validate_and_normalize
 from app.ai.vision_client import safe_provider_info
 from app.recorder.recorder_worker import stop_recorder
 from app.version import RELEASE_DATE, SENTINEL_VERSION, version_info
+from app.core.request_access import should_reject_remote_request
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 SENSITIVE_CONFIG_KEYS = {"ai_api_key", "ark_api_key"}
@@ -40,6 +41,17 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
     app = Flask(__name__, template_folder=templates_dir, static_folder=static_dir)
     # Leave room for multipart metadata while enforcing an explicit image limit below.
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES + 1024 * 1024
+
+    @app.before_request
+    def restrict_remote_dashboard_and_controls():
+        # LAN mode is unauthenticated only for the phone's ping and frame-ingest paths.
+        # Keep the dashboard, live stream, and every control/API route on loopback.
+        if should_reject_remote_request(request.remote_addr, request.path):
+            return jsonify({
+                "ok": False,
+                "error": "dashboard and control routes are available only from this PC",
+            }), 403
+
 
     # Disable Werkzeug access logs (keep your original behavior)
     import logging as _logging
