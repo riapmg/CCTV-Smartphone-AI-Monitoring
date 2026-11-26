@@ -82,7 +82,7 @@ def main():
         url_lan = f"http://{local_ip}:{port}/"
         print(f" LAN Web:    {url_lan}       open from trusted devices")
         print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
-        print(" SECURITY WARNING: LAN dashboard/control endpoints have no authentication.")
+        print(" SECURITY WARNING: LAN ping/upload endpoints are unauthenticated; dashboard and controls are loopback-only.")
         print(" LAN access was explicitly acknowledged with SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1.")
         print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
     else:
