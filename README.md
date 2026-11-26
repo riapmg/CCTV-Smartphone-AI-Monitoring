@@ -651,7 +651,7 @@ For developers who want to debug or modify features, the app can be built from s
 
 ### 4.1. Start the PC Side (Server + Dashboard) [⌃](#top)
 
-The dashboard and control API do not currently have authentication. The server therefore binds to loopback by default:
+The dashboard and control API are restricted to loopback, including when CamFlow ingest is enabled over a trusted LAN. The server therefore binds to loopback by default:
 
 ```bash
 python server.py
@@ -677,9 +677,9 @@ $env:SENTINEL_ALLOW_UNAUTHENTICATED_LAN = "1"
 python server.py
 ```
 
-Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected because the dashboard and control API do not yet have authentication. LAN mode now requires two explicit settings: the selected private interface and `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. The second setting is an acknowledgement, not authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
+Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected. LAN mode requires two explicit settings: the selected private interface and `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. The second setting acknowledges the limited unauthenticated ingest exposure; it is not authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
 
-The server prints the selected LAN address to enter in CamFlow and displays a security warning. LAN mode exposes the unauthenticated dashboard and control endpoints to devices that can reach the PC. Use a host firewall and trusted isolated network; never expose the server to the public internet or port-forward it. If authenticated remote access is required, implement and review authentication before enabling it.
+When LAN mode is enabled, non-loopback clients can reach only `/ping` and `/upload`. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes are restricted to loopback. Use the dashboard on the PC at `http://127.0.0.1:8000/`. `/upload` accepts frames only while ingest is enabled. This is a defense-in-depth restriction, not authentication for the ingest endpoint; use only a trusted, isolated network and a host firewall. Never expose or port-forward this server. An authenticated remote dashboard is not implemented.
 
 The default ingest and recording states remain OFF. Enable them manually in the dashboard only when you intend to receive a camera stream. An empty Live View before enabling ingest is expected.
 
