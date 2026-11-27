@@ -3,6 +3,9 @@ import pytest
 from app.core.server_config import resolve_server_config
 
 
+TOKEN = "A" * 64
+
+
 def test_server_defaults_to_loopback_and_default_port():
     assert resolve_server_config({}) == ("127.0.0.1", 8000)
 
@@ -11,37 +14,44 @@ def test_blank_bind_host_stays_on_loopback():
     assert resolve_server_config({"SENTINEL_BIND_HOST": "  "}) == ("127.0.0.1", 8000)
 
 
-def test_lan_bind_requires_explicit_private_interface_and_unauthenticated_opt_in():
+def test_lan_bind_accepts_a_valid_ingest_token_without_legacy_opt_in():
+    assert resolve_server_config({
+        "SENTINEL_BIND_HOST": "192.168.1.10",
+        "CAMFLOW_INGEST_TOKEN": TOKEN,
+    }) == ("192.168.1.10", 8000)
+
+
+def test_lan_bind_accepts_explicit_legacy_unauthenticated_opt_in():
     assert resolve_server_config({
         "SENTINEL_BIND_HOST": "192.168.1.10",
         "SENTINEL_ALLOW_UNAUTHENTICATED_LAN": "1",
     }) == ("192.168.1.10", 8000)
 
 
-def test_lan_bind_is_rejected_without_unauthenticated_acknowledgement():
-    with pytest.raises(ValueError, match="LAN binding is unauthenticated"):
+def test_lan_bind_is_rejected_without_token_or_legacy_acknowledgement():
+    with pytest.raises(ValueError, match="CAMFLOW_INGEST_TOKEN"):
         resolve_server_config({"SENTINEL_BIND_HOST": "192.168.1.10"})
 
 
-@pytest.mark.parametrize("opt_in", ["true", "yes", "0"])
-def test_lan_bind_rejects_non_exact_unauthenticated_acknowledgement(opt_in):
-    with pytest.raises(ValueError, match="LAN binding is unauthenticated"):
+@pytest.mark.parametrize("token", ["short", "contains whitespace " + "A" * 40, "é" * 40, "A" * 257])
+def test_invalid_ingest_tokens_are_rejected(token):
+    with pytest.raises(ValueError, match="CAMFLOW_INGEST_TOKEN"):
         resolve_server_config({
             "SENTINEL_BIND_HOST": "192.168.1.10",
-            "SENTINEL_ALLOW_UNAUTHENTICATED_LAN": opt_in,
+            "CAMFLOW_INGEST_TOKEN": token,
         })
+
+
+@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.10", "192.168.1.10"])
+def test_private_lan_interface_is_accepted_with_token(host):
+    assert resolve_server_config({
+        "SENTINEL_BIND_HOST": host,
+        "CAMFLOW_INGEST_TOKEN": TOKEN,
+    }) == (host, 8000)
 
 
 def test_custom_valid_port_is_accepted():
     assert resolve_server_config({"SENTINEL_PORT": "8123"}) == ("127.0.0.1", 8123)
-
-
-@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.10", "192.168.1.10"])
-def test_private_lan_interface_is_accepted(host):
-    assert resolve_server_config({
-        "SENTINEL_BIND_HOST": host,
-        "SENTINEL_ALLOW_UNAUTHENTICATED_LAN": "1",
-    }) == (host, 8000)
 
 
 @pytest.mark.parametrize(
