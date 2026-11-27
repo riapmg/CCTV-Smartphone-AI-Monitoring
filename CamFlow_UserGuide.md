@@ -315,7 +315,7 @@ Before using CamFlow, ensure the following conditions are met:
 6. Select **Connect**, or use **Test connection** in Settings before saving;
 7. Verify that `Status` changes to `Connected`;
 8. Once connected, tap the top-right corner to enter the Settings page if configuration adjustments are needed;
-9. Open the PC-side Dashboard using: `http://<PC_IP>:<PORT>/`;
+9. Open the PC-side Dashboard on the PC itself using: `http://127.0.0.1:<PORT>/` (dashboard/control routes are loopback-only; do not use the LAN IP);
 10. Click the `Enable Ingest` button to allow the server to receive frames;
 11. Once the **Live View** window updates with the camera feed, CamFlow is successfully running.
 
