@@ -701,8 +701,7 @@ The system has been tested under the following environments:
 - Dependencies: Flask, OpenCV, Requests, etc.  
 - Network: Local Area Network (LAN)
 
-> It is not recommended to expose the service directly to the public Internet.  
-> Security authentication mechanisms are not yet implemented in the current version.
+> Do not expose the service directly to the public Internet. Remote `/upload` supports Bearer-token authentication when `CAMFLOW_INGEST_TOKEN` is configured; the legacy unauthenticated LAN mode requires a separate explicit opt-in and should remain disabled. Dashboard/control routes are loopback-only. HTTP is plaintext: use a trusted isolated LAN, do not port-forward, and use a properly configured VPN or TLS path on untrusted networks.
 
 ---
 
@@ -712,7 +711,7 @@ The system has been tested under the following environments:
 
 To improve system completeness and extensibility, future optimizations may include:
 
-- Token / API Key authentication mechanism (required if exposed to public network)
+- TLS/HTTPS and device-pairing/authentication hardening for untrusted networks (Bearer authentication currently protects remote frame ingest; the dashboard is not remotely exposed)
 - WebSocket long connections to replace current HTTP polling (reduce latency and overhead)
 - Adaptive frame rate / resolution control (dynamically adjust interval based on network conditions)
 - Background execution mode (continue uploading when screen is off)
