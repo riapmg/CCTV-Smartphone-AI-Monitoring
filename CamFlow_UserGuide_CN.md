@@ -248,14 +248,14 @@ CamFlow 主要功能包括：
 2. 启动成功则能自动返回服务器IP地址`<PC_IP>:xxxx`；
 3. 可通过在手机端浏览器访问 `http://<PC_IP>:xxxx/ping`，若返回 `OK` 字段则启动成功；
 4. 手机与 PC 连接到 **同一 Wi-Fi**；
-5. 打开 CamFlow ，等待一段时间，由程序自动寻找服务器；
+5. 打开 CamFlow，首次启动时手动输入 PC 终端输出的 `CamFlow:` 地址；
 6. 若成功则自动写入地址，与PC端建立联系；
 7. 若失败则在弹出提示框中手动输入IP地址；
 8. 观察 `Status` 是否变为 `Connected`；
 9. 若连接成功，可点击主页面右上角进入设置页进行配置修改；
 10. 在 PC 本机打开 Dashboard：`http://127.0.0.1:<PORT>/`（Dashboard/控制接口仅允许本机 loopback，不要使用局域网 IP）；
 11. 点击 `Enable Ingest` 按钮，确认接收功能开启；
-11. 观察到 Live View 窗口更新摄像端画面，则 CamFlow 成功正常运行。
+12. 观察到 Live View 窗口更新摄像端画面，则 CamFlow 成功正常运行。
 
 ---
 
