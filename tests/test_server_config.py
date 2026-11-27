@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.server_config import resolve_server_config
+from app.core.server_config import resolve_listener_hosts, resolve_server_config
 
 
 TOKEN = "A" * 64
@@ -12,6 +12,15 @@ def test_server_defaults_to_loopback_and_default_port():
 
 def test_blank_bind_host_stays_on_loopback():
     assert resolve_server_config({"SENTINEL_BIND_HOST": "  "}) == ("127.0.0.1", 8000)
+
+
+def test_loopback_uses_only_one_listener():
+    assert resolve_listener_hosts("127.0.0.1") == ("127.0.0.1",)
+
+
+@pytest.mark.parametrize("host", ["10.1.2.3", "172.16.0.10", "192.168.1.10"])
+def test_lan_uses_separate_loopback_and_private_listeners(host):
+    assert resolve_listener_hosts(host) == ("127.0.0.1", host)
 
 
 def test_lan_bind_accepts_a_valid_ingest_token_without_legacy_opt_in():
