@@ -258,7 +258,7 @@ Format examples:
 ### 2.3. Settings Page [⌃](#top)
 
 Tap the **top-right corner** of the main interface to enter the Settings page.
-Here you can configure the server address, test connectivity, and control runtime switches.
+Here you can configure the server address, optionally enter the PC's LAN ingest Bearer token, test connectivity, and control runtime switches. The token is stored encrypted with Android Keystore and is never displayed again after saving.
 
 ---
 
@@ -267,13 +267,15 @@ Here you can configure the server address, test connectivity, and control runtim
 | Field | Type | Format | Description |
 |-------|------|--------|-------------|
 | Server address | Text input | IPv4 or IPv4:Port | Specify the target server address for manual connection |
+| LAN ingest token | Password input | 32-256 visible ASCII characters | Optional Bearer token matching `CAMFLOW_INGEST_TOKEN` on the PC; encrypted with Android Keystore |
 
 ---
 
 | Button | Trigger | Result | Description |
 |--------|--------|--------|-------------|
-| Test connection | Click | Success / Failure | Send a reachability test request to server (typically `/ping`) |
-| Save | Click | Save successful | Save current server address and settings |
+| Test connection | Click | Success / Failure | Send an unauthenticated reachability test request to server (`/ping`) |
+| Clear ingest token | Click | Token removed | Remove the encrypted token from this device |
+| Save | Click | Save successful | Save current server address, settings, and any newly entered token |
 
 ---
 
@@ -297,6 +299,7 @@ Before using CamFlow, ensure the following conditions are met:
 
 - **Project deployed locally**: The Sentinel repository has been cloned to the PC;
 - **Same LAN**: The smartphone and PC server are connected to the same Wi-Fi / LAN;
+- **Ingest token**: If the PC is configured with `CAMFLOW_INGEST_TOKEN`, enter the same token in CamFlow Settings before uploading;
 - **PC server running**: The Sentinel PC-side service is accessible from the phone;
 - **Firewall & port allowed**: Default port is `8000` (unless modified). Ensure the PC firewall allows inbound access from the phone.
 
