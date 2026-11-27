@@ -1,5 +1,8 @@
 """Request-origin and bearer-token policy for CamFlow LAN ingest."""
 
+from __future__ import annotations
+
+
 import hmac
 from ipaddress import IPv6Address, ip_address
 
