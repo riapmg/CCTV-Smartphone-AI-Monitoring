@@ -2,6 +2,8 @@
 import os
 import threading
 
+from werkzeug.serving import make_server
+
 from app.core.logger import setup_logger
 from app.core.frame_buffer import FrameBuffer
 from app.core.upload_stats import UploadStats
@@ -11,7 +13,12 @@ from app.recorder.recorder_worker import start_record_thread
 from app.ai.ai_store import AiRuntime, EventStore
 from app.ai.ai_monitor_worker import start_ai_monitor_thread
 from app.web.webapp import create_app
-from app.core.server_config import INGEST_TOKEN_ENV, resolve_server_config
+from app.core.server_config import (
+    DEFAULT_BIND_HOST,
+    INGEST_TOKEN_ENV,
+    resolve_listener_hosts,
+    resolve_server_config,
+)
 from app.version import SENTINEL_VERSION
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +30,43 @@ CONFIG_PATH = os.path.join(APP_CONFIG_DIR, "config.json")
 
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(APP_CONFIG_DIR, exist_ok=True)
+
+
+def serve_on_resolved_interfaces(app, host: str, port: int) -> None:
+    """Serve the dashboard on loopback and optional ingest on one LAN interface.
+
+    Separate sockets preserve a local dashboard when the phone sender uses a
+    selected private interface. The Flask request policy still blocks remote
+    dashboard/control routes and requires the configured Bearer token for
+    remote frame ingest.
+    """
+    listener_hosts = resolve_listener_hosts(host)
+    servers = []
+    lan_thread = None
+    try:
+        for bind_host in listener_hosts:
+            servers.append(make_server(bind_host, port, app, threaded=True))
+
+        if len(servers) == 1:
+            servers[0].serve_forever()
+            return
+
+        lan_server = servers[1]
+        lan_thread = threading.Thread(
+            target=lan_server.serve_forever,
+            name="camflow-lan-http",
+            daemon=True,
+        )
+        lan_thread.start()
+        try:
+            servers[0].serve_forever()
+        finally:
+            lan_server.shutdown()
+            lan_thread.join(timeout=3.0)
+    finally:
+        for http_server in servers:
+            http_server.server_close()
+
 
 def main():
     logger = setup_logger(SERVER_LOG_PATH)
@@ -73,24 +117,25 @@ def main():
 
     url_local = f"http://127.0.0.1:{port}/"
 
-    print("\n====================================================================")
+    print("\\n====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
-    if host != "127.0.0.1":
+    if host != DEFAULT_BIND_HOST:
         print(f" CamFlow:    {host}:{port}              enter this address manually in the app")
         if os.environ.get(INGEST_TOKEN_ENV):
             print(" LAN ingest: Bearer-token authentication enabled; enter the same token in CamFlow Settings.")
         else:
             print(" SECURITY WARNING: legacy unauthenticated LAN ingest is enabled by explicit opt-in.")
+        print(" Dashboard/control stay on loopback; only the selected LAN interface serves phone ingest.")
         print(" Use only on a trusted, isolated Wi-Fi/LAN. HTTP is not encrypted; never expose or port-forward this server.")
     else:
         print(" LAN access: disabled (loopback only)")
         print(" To opt in securely, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
         print(" CAMFLOW_INGEST_TOKEN to a random 32+ character token before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
-    print("====================================================================\n", flush=True)
+    print("====================================================================\\n", flush=True)
 
-    app.run(host=host, port=port, threaded=True, debug=False, use_reloader=False)
+    serve_on_resolved_interfaces(app, host, port)
 
 
 if __name__ == "__main__":
