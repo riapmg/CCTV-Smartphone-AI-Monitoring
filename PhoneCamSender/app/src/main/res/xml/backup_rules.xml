@@ -6,8 +6,6 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- The Android Keystore key is device-bound; never back up its encrypted token blob. -->
+    <exclude domain="sharedpref" path="phonecam_secure.xml"/>
 </full-backup-content>
