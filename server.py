@@ -27,8 +27,7 @@ os.makedirs(APP_CONFIG_DIR, exist_ok=True)
 def main():
     logger = setup_logger(SERVER_LOG_PATH)
     stop_event = threading.Event()
-    # The dashboard and control API currently have no authentication.
-    # LAN access requires a selected private interface plus a second explicit acknowledgement.
+    # Dashboard/control routes remain loopback-only; LAN ingest requires a token or explicit legacy opt-in.
     try:
         host, port = resolve_server_config(os.environ)
     except ValueError as exc:
@@ -83,7 +82,6 @@ def main():
             print(" LAN ingest: Bearer-token authentication enabled; enter the same token in CamFlow Settings.")
         else:
             print(" SECURITY WARNING: legacy unauthenticated LAN ingest is enabled by explicit opt-in.")
-        print(f" Dashboard:  http://127.0.0.1:{port}/ (this PC only)")
         print(" Use only on a trusted, isolated Wi-Fi/LAN. HTTP is not encrypted; never expose or port-forward this server.")
     else:
         print(" LAN access: disabled (loopback only)")
