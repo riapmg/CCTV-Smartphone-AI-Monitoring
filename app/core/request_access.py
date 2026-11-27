@@ -1,9 +1,7 @@
-"""Request-origin policy for the unauthenticated CamFlow LAN mode."""
+"""Request-origin and bearer-token policy for CamFlow LAN ingest."""
 
+import hmac
 from ipaddress import IPv6Address, ip_address
-
-
-LAN_INGEST_PATHS = frozenset({"/ping", "/upload"})
 
 
 def is_loopback_client(remote_addr: str | None) -> bool:
@@ -19,6 +17,44 @@ def is_loopback_client(remote_addr: str | None) -> bool:
     return address.is_loopback
 
 
+def bearer_token_matches(authorization_header: str | None, expected_token: str | None) -> bool:
+    """Compare a Bearer credential without timing-sensitive string equality."""
+    if not expected_token or not authorization_header:
+        return False
+    scheme, separator, supplied_token = authorization_header.partition(" ")
+    return (
+        separator == " "
+        and scheme.lower() == "bearer"
+        and bool(supplied_token)
+        and hmac.compare_digest(supplied_token, expected_token)
+    )
+
+
+def remote_request_denial_status(
+    remote_addr: str | None,
+    path: str,
+    authorization_header: str | None = None,
+    ingest_token: str | None = None,
+    allow_unauthenticated_lan: bool = False,
+) -> int | None:
+    """Return an HTTP denial status for remote clients, or None when allowed.
+
+    Loopback clients retain the local dashboard/control workflow. Remote clients
+    may use the health check without credentials. Remote frame ingest requires a
+    configured Bearer token, unless the operator explicitly enabled the legacy
+    unauthenticated LAN mode.
+    """
+    if is_loopback_client(remote_addr):
+        return None
+    if path == "/ping":
+        return None
+    if path == "/upload":
+        if ingest_token:
+            return None if bearer_token_matches(authorization_header, ingest_token) else 401
+        return None if allow_unauthenticated_lan else 403
+    return 403
+
+
 def should_reject_remote_request(remote_addr: str | None, path: str) -> bool:
-    """Keep dashboard/control routes local while allowing CamFlow ping and ingest."""
-    return not is_loopback_client(remote_addr) and path not in LAN_INGEST_PATHS
+    """Compatibility wrapper: remote ingest is denied without explicit auth/opt-in."""
+    return remote_request_denial_status(remote_addr, path) is not None
