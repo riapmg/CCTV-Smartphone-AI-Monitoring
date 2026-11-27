@@ -54,6 +54,7 @@ def test_bearer_token_comparison_rejects_empty_and_malformed_headers():
     assert not bearer_token_matches("Bearer", token)
     assert not bearer_token_matches("Bearer  " + token, token)
     assert not bearer_token_matches("Bearer " + token, None)
+    assert not bearer_token_matches("Bearer " + ("é" * 64), token)
     assert bearer_token_matches("bearer " + token, token)
 
 
