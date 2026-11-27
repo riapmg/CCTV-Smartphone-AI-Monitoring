@@ -253,7 +253,7 @@ CamFlow 主要功能包括：
 7. 若失败则在弹出提示框中手动输入IP地址；
 8. 观察 `Status` 是否变为 `Connected`；
 9. 若连接成功，可点击主页面右上角进入设置页进行配置修改；
-10. 打开 PC 端 Dashboard（进入返回的网址`http://<PC_IP>:xxxx/`）；
+10. 在 PC 本机打开 Dashboard：`http://127.0.0.1:<PORT>/`（Dashboard/控制接口仅允许本机 loopback，不要使用局域网 IP）；
 11. 点击 `Enable Ingest` 按钮，确认接收功能开启；
 11. 观察到 Live View 窗口更新摄像端画面，则 CamFlow 成功正常运行。
 
