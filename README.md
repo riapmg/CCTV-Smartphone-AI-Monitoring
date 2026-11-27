@@ -683,7 +683,7 @@ Replace the example address with the PC's actual private address. Copy the gener
 
 For temporary compatibility only, an operator may omit `CAMFLOW_INGEST_TOKEN` and explicitly set `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. This legacy mode permits unauthenticated frame uploads and is not recommended. Do not use it outside a trusted, isolated test network.
 
-When LAN mode is enabled, non-loopback clients can reach only `/ping` and the authenticated (or explicitly legacy-enabled) `/upload` endpoint. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes remain loopback-only. Use the dashboard on the PC at `http://127.0.0.1:8000/`. Ingest and recording remain OFF by default and must be enabled manually in the local dashboard.
+When LAN mode is enabled, non-loopback clients can reach only `/ping` and the authenticated (or explicitly legacy-enabled) `/upload` endpoint. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes remain loopback-only. The server opens separate listeners on `127.0.0.1` and the selected private LAN interface. This keeps the dashboard available on the PC while CamFlow sends frames to the LAN address. Use the dashboard on the PC at `http://127.0.0.1:8000/`. Ingest and recording remain OFF by default and must be enabled manually in the local dashboard.
 
 Bearer-token authentication does not encrypt HTTP traffic. Use a trusted Wi-Fi/LAN, host firewall, and no port forwarding; use a properly configured VPN or TLS-terminating reverse proxy for networks you do not trust. An authenticated remote dashboard is not implemented.
 
