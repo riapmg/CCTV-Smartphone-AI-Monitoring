@@ -61,8 +61,9 @@ def serve_on_resolved_interfaces(app, host: str, port: int) -> None:
         try:
             servers[0].serve_forever()
         finally:
-            lan_server.shutdown()
-            lan_thread.join(timeout=3.0)
+            if lan_thread.is_alive():
+                lan_server.shutdown()
+                lan_thread.join(timeout=3.0)
     finally:
         for http_server in servers:
             http_server.server_close()
@@ -117,7 +118,8 @@ def main():
 
     url_local = f"http://127.0.0.1:{port}/"
 
-    print("\\n====================================================================")
+    print()
+    print("====================================================================")
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
     if host != DEFAULT_BIND_HOST:
@@ -133,7 +135,7 @@ def main():
         print(" To opt in securely, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
         print(" CAMFLOW_INGEST_TOKEN to a random 32+ character token before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
-    print("====================================================================\\n", flush=True)
+    print("====================================================================", flush=True)
 
     serve_on_resolved_interfaces(app, host, port)
 
