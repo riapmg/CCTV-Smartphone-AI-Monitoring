@@ -1,5 +1,8 @@
 """Safe defaults and LAN-ingest credential validation for CamFlow."""
 
+from __future__ import annotations
+
+
 from collections.abc import Mapping
 import ipaddress
 
