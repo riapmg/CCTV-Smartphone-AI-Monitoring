@@ -11,7 +11,7 @@ from app.recorder.recorder_worker import start_record_thread
 from app.ai.ai_store import AiRuntime, EventStore
 from app.ai.ai_monitor_worker import start_ai_monitor_thread
 from app.web.webapp import create_app
-from app.core.server_config import resolve_server_config
+from app.core.server_config import INGEST_TOKEN_ENV, resolve_server_config
 from app.version import SENTINEL_VERSION
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -78,17 +78,17 @@ def main():
     print(f" Sentinel v{SENTINEL_VERSION} Server Started")
     print(f" Dashboard:  {url_local}            open on this PC")
     if host != "127.0.0.1":
-        local_ip = host
-        url_lan = f"http://{local_ip}:{port}/"
-        print(f" LAN Web:    {url_lan}       open from trusted devices")
-        print(f" CamFlow:    {local_ip}:{port}              enter this address manually in the app")
-        print(" SECURITY WARNING: LAN ping/upload endpoints are unauthenticated; dashboard and controls are loopback-only.")
-        print(" LAN access was explicitly acknowledged with SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1.")
-        print(" Use only on a trusted, isolated Wi-Fi/LAN. Never expose or port-forward this server.")
+        print(f" CamFlow:    {host}:{port}              enter this address manually in the app")
+        if os.environ.get(INGEST_TOKEN_ENV):
+            print(" LAN ingest: Bearer-token authentication enabled; enter the same token in CamFlow Settings.")
+        else:
+            print(" SECURITY WARNING: legacy unauthenticated LAN ingest is enabled by explicit opt-in.")
+        print(f" Dashboard:  http://127.0.0.1:{port}/ (this PC only)")
+        print(" Use only on a trusted, isolated Wi-Fi/LAN. HTTP is not encrypted; never expose or port-forward this server.")
     else:
         print(" LAN access: disabled (loopback only)")
-        print(" To opt in, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
-        print(" SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 before starting.")
+        print(" To opt in securely, set SENTINEL_BIND_HOST to a private RFC1918 IPv4 address and")
+        print(" CAMFLOW_INGEST_TOKEN to a random 32+ character token before starting.")
     print(" Default ingest: OFF (enable in dashboard)")
     print("====================================================================\n", flush=True)
 
