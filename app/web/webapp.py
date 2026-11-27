@@ -12,7 +12,8 @@ from app.config.config_store import validate_and_normalize
 from app.ai.vision_client import safe_provider_info
 from app.recorder.recorder_worker import stop_recorder
 from app.version import RELEASE_DATE, SENTINEL_VERSION, version_info
-from app.core.request_access import should_reject_remote_request
+from app.core.request_access import remote_request_denial_status
+from app.core.server_config import INGEST_TOKEN_ENV, LAN_UNAUTHENTICATED_OPT_IN, validate_ingest_token
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 SENSITIVE_CONFIG_KEYS = {"ai_api_key", "ark_api_key"}
@@ -41,16 +42,30 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
     app = Flask(__name__, template_folder=templates_dir, static_folder=static_dir)
     # Leave room for multipart metadata while enforcing an explicit image limit below.
     app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES + 1024 * 1024
+    ingest_token = validate_ingest_token(os.environ.get(INGEST_TOKEN_ENV))
+    allow_unauthenticated_lan = (
+        os.environ.get(LAN_UNAUTHENTICATED_OPT_IN, "").strip() == "1"
+    )
 
     @app.before_request
     def restrict_remote_dashboard_and_controls():
-        # LAN mode is unauthenticated only for the phone's ping and frame-ingest paths.
-        # Keep the dashboard, live stream, and every control/API route on loopback.
-        if should_reject_remote_request(request.remote_addr, request.path):
-            return jsonify({
-                "ok": False,
-                "error": "dashboard and control routes are available only from this PC",
-            }), 403
+        # Keep dashboard/control routes local. Remote frame ingest requires a
+        # Bearer token unless the operator explicitly selected legacy LAN mode.
+        denial_status = remote_request_denial_status(
+            request.remote_addr,
+            request.path,
+            request.headers.get("Authorization"),
+            ingest_token,
+            allow_unauthenticated_lan,
+        )
+        if denial_status is not None:
+            if request.path == "/upload":
+                stats.mark_rejected()
+            if denial_status == 401:
+                message = "valid Bearer token required for remote ingest"
+            else:
+                message = "dashboard and control routes are available only from this PC"
+            return jsonify({"ok": False, "error": message}), denial_status
 
 
     # Disable Werkzeug access logs (keep your original behavior)
