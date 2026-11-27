@@ -659,29 +659,33 @@ python server.py
 
 This keeps the dashboard local to the PC at `http://127.0.0.1:8000/`; CamFlow on another device cannot connect in this mode.
 
-#### Enable CamFlow access on a trusted LAN
+#### Enable authenticated CamFlow access on a trusted LAN
 
-Only when the PC and phone are on a trusted, isolated Wi-Fi/LAN, explicitly opt in to one private RFC1918 IPv4 interface. Prefer the PC's specific LAN address (for example, `192.168.1.10`) so the service does not listen on every network interface:
+Prefer token-authenticated ingest. Use the PC's specific private RFC1918 IPv4 address (for example, `192.168.1.10`); wildcard binding to `0.0.0.0` is deliberately rejected.
 
 Linux / macOS:
 
 ```bash
-SENTINEL_BIND_HOST=192.168.1.10 SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1 python server.py
+export SENTINEL_BIND_HOST=192.168.1.10
+export CAMFLOW_INGEST_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+python server.py
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:SENTINEL_BIND_HOST = "192.168.1.10"
-$env:SENTINEL_ALLOW_UNAUTHENTICATED_LAN = "1"
+$env:CAMFLOW_INGEST_TOKEN = (python -c "import secrets; print(secrets.token_urlsafe(32))").Trim()
 python server.py
 ```
 
-Replace the example with the PC's actual private address. The wildcard address `0.0.0.0` is deliberately rejected. LAN mode requires two explicit settings: the selected private interface and `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. The second setting acknowledges the limited unauthenticated ingest exposure; it is not authentication. If the private address changes, update the setting and restart the server rather than binding to every interface.
+Replace the example address with the PC's actual private address. Copy the generated token into **CamFlow → Settings → LAN ingest token** and save. The Android app encrypts the token with an Android Keystore AES-GCM key; it does not place the token in ordinary preferences or logs. The same token must be configured on the PC and phone. `/ping` remains available without credentials for connection testing; remote `/upload` requires `Authorization: Bearer <token>`.
 
-When LAN mode is enabled, non-loopback clients can reach only `/ping` and `/upload`. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes are restricted to loopback. Use the dashboard on the PC at `http://127.0.0.1:8000/`. `/upload` accepts frames only while ingest is enabled. This is a defense-in-depth restriction, not authentication for the ingest endpoint; use only a trusted, isolated network and a host firewall. Never expose or port-forward this server. An authenticated remote dashboard is not implemented.
+For temporary compatibility only, an operator may omit `CAMFLOW_INGEST_TOKEN` and explicitly set `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. This legacy mode permits unauthenticated frame uploads and is not recommended. Do not use it outside a trusted, isolated test network.
 
-The default ingest and recording states remain OFF. Enable them manually in the dashboard only when you intend to receive a camera stream. An empty Live View before enabling ingest is expected.
+When LAN mode is enabled, non-loopback clients can reach only `/ping` and the authenticated (or explicitly legacy-enabled) `/upload` endpoint. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes remain loopback-only. Use the dashboard on the PC at `http://127.0.0.1:8000/`. Ingest and recording remain OFF by default and must be enabled manually in the local dashboard.
+
+Bearer-token authentication does not encrypt HTTP traffic. Use a trusted Wi-Fi/LAN, host firewall, and no port forwarding; use a properly configured VPN or TLS-terminating reverse proxy for networks you do not trust. An authenticated remote dashboard is not implemented.
 
 At this point, the PC-side service has started successfully.
 
