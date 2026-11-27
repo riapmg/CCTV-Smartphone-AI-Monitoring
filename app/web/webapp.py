@@ -60,12 +60,14 @@ def create_app(cfg_store, frame_buf, stats, rec_rt, ai_rt, event_store, logger, 
         )
         if denial_status is not None:
             if request.path == "/upload":
-                stats.mark_rejected()
-            if request.path == "/upload":
                 if denial_status == 401:
-                    message = "valid Bearer token required for remote ingest"
-                else:
-                    message = "remote ingest is disabled; configure a Bearer token or explicit legacy opt-in"
+                    response = jsonify({
+                        "ok": False,
+                        "error": "valid Bearer token required for remote ingest",
+                    })
+                    response.headers["WWW-Authenticate"] = 'Bearer realm="CamFlow ingest"'
+                    return response, 401
+                message = "remote ingest is disabled; configure a Bearer token or explicit legacy opt-in"
             else:
                 message = "dashboard and control routes are available only from this PC"
             return jsonify({"ok": False, "error": message}), denial_status
