@@ -2,8 +2,6 @@
 import os
 import threading
 
-from werkzeug.serving import make_server
-
 from app.core.logger import setup_logger
 from app.core.frame_buffer import FrameBuffer
 from app.core.upload_stats import UploadStats
@@ -13,10 +11,10 @@ from app.recorder.recorder_worker import start_record_thread
 from app.ai.ai_store import AiRuntime, EventStore
 from app.ai.ai_monitor_worker import start_ai_monitor_thread
 from app.web.webapp import create_app
+from app.core.http_server import serve_on_resolved_interfaces
 from app.core.server_config import (
     DEFAULT_BIND_HOST,
     INGEST_TOKEN_ENV,
-    resolve_listener_hosts,
     resolve_server_config,
 )
 from app.version import SENTINEL_VERSION
@@ -30,43 +28,6 @@ CONFIG_PATH = os.path.join(APP_CONFIG_DIR, "config.json")
 
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(APP_CONFIG_DIR, exist_ok=True)
-
-
-def serve_on_resolved_interfaces(app, host: str, port: int) -> None:
-    """Serve the dashboard on loopback and optional ingest on one LAN interface.
-
-    Separate sockets preserve a local dashboard when the phone sender uses a
-    selected private interface. The Flask request policy still blocks remote
-    dashboard/control routes and requires the configured Bearer token for
-    remote frame ingest.
-    """
-    listener_hosts = resolve_listener_hosts(host)
-    servers = []
-    lan_thread = None
-    try:
-        for bind_host in listener_hosts:
-            servers.append(make_server(bind_host, port, app, threaded=True))
-
-        if len(servers) == 1:
-            servers[0].serve_forever()
-            return
-
-        lan_server = servers[1]
-        lan_thread = threading.Thread(
-            target=lan_server.serve_forever,
-            name="camflow-lan-http",
-            daemon=True,
-        )
-        lan_thread.start()
-        try:
-            servers[0].serve_forever()
-        finally:
-            if lan_thread.is_alive():
-                lan_server.shutdown()
-                lan_thread.join(timeout=3.0)
-    finally:
-        for http_server in servers:
-            http_server.server_close()
 
 
 def main():
