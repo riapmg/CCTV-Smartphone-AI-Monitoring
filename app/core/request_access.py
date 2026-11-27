@@ -22,12 +22,13 @@ def bearer_token_matches(authorization_header: str | None, expected_token: str |
     if not expected_token or not authorization_header:
         return False
     scheme, separator, supplied_token = authorization_header.partition(" ")
-    return (
-        separator == " "
-        and scheme.lower() == "bearer"
-        and bool(supplied_token)
-        and hmac.compare_digest(supplied_token, expected_token)
-    )
+    if separator != " " or scheme.lower() != "bearer" or not supplied_token:
+        return False
+    try:
+        return hmac.compare_digest(supplied_token, expected_token)
+    except TypeError:
+        # compare_digest rejects non-ASCII str inputs; treat malformed headers as invalid.
+        return False
 
 
 def remote_request_denial_status(
