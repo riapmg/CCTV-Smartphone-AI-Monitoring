@@ -210,13 +210,15 @@ CamFlow 主要功能包括：
 | 字段 | 类型 | 格式 | 功能说明 |
 |------|------|---------------|----------|
 | Server address | 文本输入 | IPv4 或 IPv4:Port | 指定目标服务器地址，手动连接服务器 |
+| LAN ingest token | 密码输入 | 32-256 个可见 ASCII 字符 | 与 PC 端 `CAMFLOW_INGEST_TOKEN` 相同；保存后由 Android Keystore 加密存储 |
 
 ---
 
 | 按钮 | 触发 | 状态 | 功能说明 |
 |------|------|---------------|----------|
 | Test connection | 点击 | 成功 / 失败 | 向服务器发送可达性测试请求（如 `/ping`）|
-| Save | 点击 | 保存成功 | 使用当前服务器地址与设置 |
+| Clear ingest token | 点击 | 已清除 | 从设备删除加密 token |
+| Save | 点击 | 保存成功 | 保存当前服务器地址、设置及新输入的 token |
 
 ---
 
@@ -240,6 +242,7 @@ CamFlow 主要功能包括：
 - **项目已本地部署**：已从github仓库克隆项目到本地；
 - **同一局域网**：手机与 PC 端服务器处于同一 Wi-Fi/LAN；
 - **PC 端服务已启动**：Sentinel PC 端服务对手机可达；
+- **LAN ingest token**：若 PC 设置了 `CAMFLOW_INGEST_TOKEN`，必须在 CamFlow 设置页输入并保存相同 token；
 - **端口与防火墙放行**：默认端口为 `8000`（以你的 PC 端实际配置为准），PC 防火墙允许手机访问。
 
 #### 2.4.2. 部署流程
@@ -613,7 +616,7 @@ CamFlow:    192.168.1.10:8000    enter this address manually in the app
 - 依赖库：Flask、OpenCV、Requests 等
 - 网络环境：局域网（LAN）
 
-> 不建议在公网环境直接暴露接口，尚未增加安全认证机制。
+> 不要将服务直接暴露到公网。远程 `/upload` 已支持 Bearer Token：PC 设置 `CAMFLOW_INGEST_TOKEN` 后，手机必须配置相同 token；未认证 LAN 模式需要单独显式启用，应保持关闭。Dashboard/控制接口仅允许 PC 本机 loopback。HTTP 仍为明文传输，请仅在可信隔离 LAN 使用，不要端口转发。
 
 ---
 
@@ -623,7 +626,7 @@ CamFlow:    192.168.1.10:8000    enter this address manually in the app
 
 为提升系统完整性与可扩展性，可做的优化包括：
 
-- Token / API Key 认证机制（如需接触公网）
+- TLS/HTTPS 与设备配对/认证强化（当前 Bearer Token 仅保护远程帧上传；Dashboard 不提供远程访问）
 - WebSocket 长连接替代当前的 HTTP 轮询（降低延迟和损耗）
 - 自适应帧率/分辨率控制（根据网络情况动态调整 interval）
 - 后台运行模式（屏幕关闭仍持续上传）
