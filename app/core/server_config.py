@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from collections.abc import Mapping
 import ipaddress
 
@@ -45,6 +44,14 @@ def validate_bind_host(host: str) -> str:
             "SENTINEL_BIND_HOST must be loopback or a private RFC1918 IPv4 address"
         )
     return host
+
+
+def resolve_listener_hosts(host: str) -> tuple[str, ...]:
+    """Bind the local dashboard and, when selected, one separate LAN interface."""
+    selected_host = validate_bind_host(host)
+    if selected_host == DEFAULT_BIND_HOST:
+        return (DEFAULT_BIND_HOST,)
+    return (DEFAULT_BIND_HOST, selected_host)
 
 
 def resolve_server_config(environ: Mapping[str, str]) -> tuple[str, int]:
