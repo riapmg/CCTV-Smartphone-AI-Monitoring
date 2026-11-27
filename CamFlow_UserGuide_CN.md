@@ -220,6 +220,8 @@ CamFlow 主要功能包括：
 | Clear ingest token | 点击 | 已清除 | 从设备删除加密 token |
 | Save | 点击 | 保存成功 | 保存当前服务器地址、设置及新输入的 token |
 
+> 提示：`Test connection` 只检查 `/ping` 的网络可达性，不会验证 token。Token 会在远程 `/upload` 帧上传时验证。
+
 ---
 
 | 开关 | 状态 | 系统行为 | 设计目的 |
