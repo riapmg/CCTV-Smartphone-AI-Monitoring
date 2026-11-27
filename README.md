@@ -651,27 +651,41 @@ For developers who want to debug or modify features, the app can be built from s
 
 ### 4.1. Start the PC Side (Server + Dashboard) [⌃](#top)
 
-Run the following command in the project root directory:
+The dashboard and control API are restricted to loopback, including when CamFlow ingest is enabled over a trusted LAN. The server therefore binds to loopback by default:
 
 ```bash
 python server.py
 ```
 
-After successful startup, you should see output similar to:
+This keeps the dashboard local to the PC at `http://127.0.0.1:8000/`; CamFlow on another device cannot connect in this mode.
 
+#### Enable authenticated CamFlow access on a trusted LAN
+
+Prefer token-authenticated ingest. Use the PC's specific private RFC1918 IPv4 address (for example, `192.168.1.10`); wildcard binding to `0.0.0.0` is deliberately rejected.
+
+Linux / macOS:
+
+```bash
+export SENTINEL_BIND_HOST=192.168.1.10
+export CAMFLOW_INGEST_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+python server.py
 ```
-===========================================================
-PhoneCam Server Started
-Local:   http://127.0.0.1:<PORT>/        for dashboard web  # Recommended address for browser
-LAN:     http://<LAN_IP>:<PORT>/         for CamFlow link   # Address for CamFlow device connection
-Default ingest: OFF (enable in dashboard)
-===========================================================
 
-* Serving Flask app 'app.web.webapp'
-* Debug mode: off
+Windows PowerShell:
+
+```powershell
+$env:SENTINEL_BIND_HOST = "192.168.1.10"
+$env:CAMFLOW_INGEST_TOKEN = (python -c "import secrets; print(secrets.token_urlsafe(32))").Trim()
+python server.py
 ```
 
-> ⚠️ Important: The camera device must use the LAN address. If the server starts successfully but ingest is not enabled, the Live View being empty is normal behavior.
+Replace the example address with the PC's actual private address. Copy the generated token into **CamFlow → Settings → LAN ingest token** and save. The Android app encrypts the token with an Android Keystore AES-GCM key; it does not place the token in ordinary preferences or logs. The same token must be configured on the PC and phone. `/ping` remains available without credentials for connection testing; remote `/upload` requires `Authorization: Bearer <token>`.
+
+For temporary compatibility only, an operator may omit `CAMFLOW_INGEST_TOKEN` and explicitly set `SENTINEL_ALLOW_UNAUTHENTICATED_LAN=1`. This legacy mode permits unauthenticated frame uploads and is not recommended. Do not use it outside a trusted, isolated test network.
+
+When LAN mode is enabled, non-loopback clients can reach only `/ping` and the authenticated (or explicitly legacy-enabled) `/upload` endpoint. The dashboard, MJPEG `/stream`, static assets, configuration, status, recording, snapshot, and shutdown routes remain loopback-only. The server opens separate listeners on `127.0.0.1` and the selected private LAN interface. This keeps the dashboard available on the PC while CamFlow sends frames to the LAN address. Use the dashboard on the PC at `http://127.0.0.1:8000/`. Ingest and recording remain OFF by default and must be enabled manually in the local dashboard.
+
+Bearer-token authentication does not encrypt HTTP traffic. Use a trusted Wi-Fi/LAN, host firewall, and no port forwarding; use a properly configured VPN or TLS-terminating reverse proxy for networks you do not trust. An authenticated remote dashboard is not implemented.
 
 At this point, the PC-side service has started successfully.
 

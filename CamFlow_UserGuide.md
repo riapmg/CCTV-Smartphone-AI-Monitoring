@@ -258,7 +258,7 @@ Format examples:
 ### 2.3. Settings Page [⌃](#top)
 
 Tap the **top-right corner** of the main interface to enter the Settings page.
-Here you can configure the server address, test connectivity, and control runtime switches.
+Here you can configure the server address, optionally enter the PC's LAN ingest Bearer token, test connectivity, and control runtime switches. The token is stored encrypted with Android Keystore and is never displayed again after saving.
 
 ---
 
@@ -267,13 +267,15 @@ Here you can configure the server address, test connectivity, and control runtim
 | Field | Type | Format | Description |
 |-------|------|--------|-------------|
 | Server address | Text input | IPv4 or IPv4:Port | Specify the target server address for manual connection |
+| LAN ingest token | Password input | 32-256 visible ASCII characters | Optional Bearer token matching `CAMFLOW_INGEST_TOKEN` on the PC; encrypted with Android Keystore |
 
 ---
 
 | Button | Trigger | Result | Description |
 |--------|--------|--------|-------------|
-| Test connection | Click | Success / Failure | Send a reachability test request to server (typically `/ping`) |
-| Save | Click | Save successful | Save current server address and settings |
+| Test connection | Click | Success / Failure | Send an unauthenticated reachability test request to server (`/ping`) |
+| Clear ingest token | Click | Token removed | Remove the encrypted token from this device |
+| Save | Click | Save successful | Save current server address, settings, and any newly entered token |
 
 ---
 
@@ -297,6 +299,7 @@ Before using CamFlow, ensure the following conditions are met:
 
 - **Project deployed locally**: The Sentinel repository has been cloned to the PC;
 - **Same LAN**: The smartphone and PC server are connected to the same Wi-Fi / LAN;
+- **Ingest token**: If the PC is configured with `CAMFLOW_INGEST_TOKEN`, enter the same token in CamFlow Settings before uploading;
 - **PC server running**: The Sentinel PC-side service is accessible from the phone;
 - **Firewall & port allowed**: Default port is `8000` (unless modified). Ensure the PC firewall allows inbound access from the phone.
 
@@ -312,7 +315,7 @@ Before using CamFlow, ensure the following conditions are met:
 6. Select **Connect**, or use **Test connection** in Settings before saving;
 7. Verify that `Status` changes to `Connected`;
 8. Once connected, tap the top-right corner to enter the Settings page if configuration adjustments are needed;
-9. Open the PC-side Dashboard using: `http://<PC_IP>:<PORT>/`;
+9. Open the PC-side Dashboard on the PC itself using: `http://127.0.0.1:<PORT>/` (dashboard/control routes are loopback-only; do not use the LAN IP);
 10. Click the `Enable Ingest` button to allow the server to receive frames;
 11. Once the **Live View** window updates with the camera feed, CamFlow is successfully running.
 
@@ -698,8 +701,7 @@ The system has been tested under the following environments:
 - Dependencies: Flask, OpenCV, Requests, etc.  
 - Network: Local Area Network (LAN)
 
-> It is not recommended to expose the service directly to the public Internet.  
-> Security authentication mechanisms are not yet implemented in the current version.
+> Do not expose the service directly to the public Internet. Remote `/upload` supports Bearer-token authentication when `CAMFLOW_INGEST_TOKEN` is configured; the legacy unauthenticated LAN mode requires a separate explicit opt-in and should remain disabled. Dashboard/control routes are loopback-only. HTTP is plaintext: use a trusted isolated LAN, do not port-forward, and use a properly configured VPN or TLS path on untrusted networks.
 
 ---
 
@@ -709,7 +711,7 @@ The system has been tested under the following environments:
 
 To improve system completeness and extensibility, future optimizations may include:
 
-- Token / API Key authentication mechanism (required if exposed to public network)
+- TLS/HTTPS and device-pairing/authentication hardening for untrusted networks (Bearer authentication currently protects remote frame ingest; the dashboard is not remotely exposed)
 - WebSocket long connections to replace current HTTP polling (reduce latency and overhead)
 - Adaptive frame rate / resolution control (dynamically adjust interval based on network conditions)
 - Background execution mode (continue uploading when screen is off)

@@ -29,6 +29,9 @@ class SettingsActivity : AppCompatActivity() {
         val spinnerQuality = findViewById<Spinner>(R.id.spinnerImageQuality)
         val spinnerUploadRate = findViewById<Spinner>(R.id.spinnerUploadRate)
         val spinnerResolution = findViewById<Spinner>(R.id.spinnerResolution)
+        val tokenInput = findViewById<EditText>(R.id.ingestTokenInput)
+        val tokenStatus = findViewById<TextView>(R.id.ingestTokenStatus)
+        val btnClearToken = findViewById<Button>(R.id.btnClearToken)
         findViewById<TextView>(R.id.textVersion).text =
             getString(R.string.camflow_version_format, BuildConfig.VERSION_NAME)
 
@@ -81,6 +84,18 @@ class SettingsActivity : AppCompatActivity() {
 // Initialize the switch status
         swDebug.isChecked = prefs.getBoolean("showDebug", false)
         addrInput.setText(prefs.getString("serverInput", "") ?: "")
+        tokenInput.setText("")
+        tokenStatus.text = if (SecureTokenStore.readToken(this).isNullOrBlank()) {
+            "No ingest token stored"
+        } else {
+            "Ingest token stored securely on this device"
+        }
+        btnClearToken.setOnClickListener {
+            SecureTokenStore.clear(this)
+            tokenInput.setText("")
+            tokenStatus.text = "No ingest token stored"
+            Toast.makeText(this, "Ingest token cleared", Toast.LENGTH_SHORT).show()
+        }
 
         btnTest.setOnClickListener {
             val input = addrInput.text.toString().trim()
@@ -107,6 +122,29 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, "Invalid format. Please enter IP or IP:port.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
+            val newToken = tokenInput.text.toString()
+            if (newToken.isNotBlank()) {
+                val normalizedToken = newToken.trim()
+                if (SecureTokenStore.authorizationHeader(normalizedToken) == null) {
+                    Toast.makeText(
+                        this,
+                        "Token must be 32-256 visible ASCII characters with no spaces.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@setOnClickListener
+                }
+                try {
+                    SecureTokenStore.save(this, normalizedToken)
+                } catch (_: Exception) {
+                    Toast.makeText(
+                        this,
+                        "Could not store the token securely on this device.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@setOnClickListener
+                }
+            }
+
             prefs.edit()
                 .putString("serverInput", input)
                 .putString("baseUrl", baseUrl)
@@ -118,6 +156,12 @@ class SettingsActivity : AppCompatActivity() {
                 .putString("resolutionLabel", spinnerResolution.selectedItem.toString())
                 .apply()
 
+            tokenInput.setText("")
+            tokenStatus.text = if (SecureTokenStore.readToken(this).isNullOrBlank()) {
+                "No ingest token stored"
+            } else {
+                "Ingest token stored securely on this device"
+            }
             setResult(Activity.RESULT_OK)
             finish()
         }

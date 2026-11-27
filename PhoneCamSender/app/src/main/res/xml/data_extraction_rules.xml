@@ -5,15 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- The token is encrypted with a device-bound Android Keystore key. -->
+        <exclude domain="sharedpref" path="phonecam_secure.xml"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- Do not migrate ciphertext without the originating device's Keystore key. -->
+        <exclude domain="sharedpref" path="phonecam_secure.xml"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

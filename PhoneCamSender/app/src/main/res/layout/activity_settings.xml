@@ -41,6 +41,36 @@
                 android:hint="e.g. 192.168.1.10:8000"
                 android:inputType="text" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="LAN ingest token (optional)"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/ingestTokenStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No ingest token stored"
+                android:textColor="#666666"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/ingestTokenInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Paste the same token configured on the PC"
+                android:inputType="textPassword|textNoSuggestions"
+                android:singleLine="true"
+                android:importantForAutofill="no" />
+
+            <Button
+                android:id="@+id/btnClearToken"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Clear ingest token" />
+
             <Button
                 android:id="@+id/btnTest"
                 android:layout_width="match_parent"

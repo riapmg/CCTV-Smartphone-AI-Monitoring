@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
         .build()
     private val prefs by lazy { getSharedPreferences("phonecam", MODE_PRIVATE) }
     private var baseUrl: String? = null
+    @Volatile private var ingestAuthorizationHeader: String? = null
     private var lastSentTs = 0L
     private val uploadInFlight = AtomicBoolean(false)
     private val uploadSuccessCount = AtomicLong(0)
@@ -90,6 +91,7 @@ class MainActivity : AppCompatActivity() {
         applySettingsFromPrefs()
     }
     private fun applySettingsFromPrefs() {
+        refreshIngestAuthorizationHeader()
         dbgEnabledFlag = prefs.getBoolean("showDebug", false)
 
         val hidePreviewFlag = prefs.getBoolean("hidePreview", true)
@@ -158,6 +160,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onServerReady(url: String) {
+        refreshIngestAuthorizationHeader()
         baseUrl = url
         prefs.edit().putString("baseUrl", url).apply()
 
@@ -372,6 +375,9 @@ class MainActivity : AppCompatActivity() {
             Request.Builder()
                 .url(uploadUrl)
                 .post(body)
+                .apply {
+                    ingestAuthorizationHeader?.let { header("Authorization", it) }
+                }
                 .build()
         } catch (_: IllegalArgumentException) {
             uploadFailureCount.incrementAndGet()
@@ -407,6 +413,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var overlayText: TextView
+
+    private fun refreshIngestAuthorizationHeader() {
+        ingestAuthorizationHeader = SecureTokenStore.authorizationHeader(
+            SecureTokenStore.readToken(this)
+        )
+    }
 
     private fun setStatus(text: String) {
         runOnUiThread { statusText.text = text }

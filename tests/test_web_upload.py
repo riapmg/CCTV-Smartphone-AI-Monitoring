@@ -80,3 +80,50 @@ def test_upload_tracks_missing_invalid_and_oversized_images(tmp_path):
     assert counts["400_missing_image"] == 1
     assert counts["400_decode_failed"] == 1
     assert counts["413_image_too_large"] == 1
+
+
+
+def test_remote_upload_requires_valid_bearer_token(tmp_path, monkeypatch):
+    token = "C" * 64
+    monkeypatch.setenv("CAMFLOW_INGEST_TOKEN", token)
+    monkeypatch.delenv("SENTINEL_ALLOW_UNAUTHENTICATED_LAN", raising=False)
+    client, frame_buf, stats = _make_upload_client(tmp_path)
+    assert client.post("/api/ingest/enable").status_code == 200
+
+    ok, encoded = cv2.imencode(".jpg", np.zeros((24, 32, 3), dtype=np.uint8))
+    assert ok
+    remote = {"REMOTE_ADDR": "192.168.1.20"}
+
+    def upload(headers=None):
+        return client.post(
+            "/upload",
+            data={"image": (io.BytesIO(encoded.tobytes()), "frame.jpg")},
+            content_type="multipart/form-data",
+            headers=headers or {},
+            environ_base=remote,
+        )
+
+    assert upload().status_code == 401
+    assert upload({"Authorization": "Bearer wrong-token"}).status_code == 401
+    accepted = upload({"Authorization": f"Bearer {token}"})
+    assert accepted.status_code == 200
+    assert frame_buf.get_copy().shape == (24, 32, 3)
+    assert stats.snapshot_counts()["200_ok"] == 1
+
+
+def test_remote_upload_legacy_mode_requires_explicit_acknowledgement(tmp_path, monkeypatch):
+    monkeypatch.delenv("CAMFLOW_INGEST_TOKEN", raising=False)
+    monkeypatch.setenv("SENTINEL_ALLOW_UNAUTHENTICATED_LAN", "1")
+    client, frame_buf, _ = _make_upload_client(tmp_path)
+    assert client.post("/api/ingest/enable").status_code == 200
+
+    ok, encoded = cv2.imencode(".jpg", np.zeros((24, 32, 3), dtype=np.uint8))
+    assert ok
+    accepted = client.post(
+        "/upload",
+        data={"image": (io.BytesIO(encoded.tobytes()), "frame.jpg")},
+        content_type="multipart/form-data",
+        environ_base={"REMOTE_ADDR": "192.168.1.20"},
+    )
+    assert accepted.status_code == 200
+    assert frame_buf.get_copy().shape == (24, 32, 3)
